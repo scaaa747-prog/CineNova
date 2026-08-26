@@ -92,13 +92,30 @@ fun PlayerScreen(itemId: String, onBack: () -> Unit) {
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     val speeds = listOf(0.5f, 1f, 1.25f, 1.5f, 2f)
 
+    // Resolve a real playback source from the API layer for catalog IDs;
+    // falls back to the bundled demo stream for local/demo content.
+    var streamUrl by remember { mutableStateOf(DEMO_STREAM) }
+    LaunchedEffect(itemId) {
+        val subjectId = itemId.toLongOrNull() ?: return@LaunchedEffect
+        when (
+            val result = com.cinenova.app.di.ServiceLocator.catalogRepository
+                .playbackResources(subjectId, season = 0, episode = 0)
+        ) {
+            is com.cinenova.app.data.remote.ApiResult.Success ->
+                result.value.bestSource()?.let { source ->
+                    if (source.url.isNotBlank()) streamUrl = source.url
+                }
+            else -> Unit
+        }
+    }
+
     fun hideControlsDelayed() {
         controlsVisible = true
     }
 
-    DisposableEffect(itemId) {
+    DisposableEffect(streamUrl) {
         val exo = ExoPlayer.Builder(context).build().apply {
-            setMediaItem(ExoMediaItem.fromUri(DEMO_STREAM))
+            setMediaItem(ExoMediaItem.fromUri(streamUrl))
             playWhenReady = true
             prepare()
             addListener(object : Player.Listener {

@@ -20,7 +20,9 @@ object MovieBoxClientFactory {
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(RequestAuthInterceptor(authProvider))
+            .addInterceptor(BearerAuthInterceptor())
             .addInterceptor(HostFailoverInterceptor())
+            .addInterceptor(ResponseTokenCaptureInterceptor())
             .build()
 
     fun createApi(okHttpClient: OkHttpClient): MovieBoxApi =

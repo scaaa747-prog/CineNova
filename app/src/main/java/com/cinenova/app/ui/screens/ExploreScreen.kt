@@ -32,6 +32,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,7 +44,9 @@ import com.cinenova.app.data.AppStore
 import com.cinenova.app.data.DemoRepository
 import com.cinenova.app.data.MediaType
 import com.cinenova.app.ui.components.EmptyState
+import com.cinenova.app.ui.components.ErrorState
 import com.cinenova.app.ui.components.GenreChip
+import com.cinenova.app.ui.components.LoadingSkeleton
 import com.cinenova.app.ui.components.MoviePosterCard
 import com.cinenova.app.ui.components.NoResultsState
 import com.cinenova.app.ui.components.SectionHeader
@@ -69,6 +72,15 @@ fun ExploreScreen(
     var genre by remember { mutableStateOf<String?>(null) }
     var sort by remember { mutableStateOf(SortOption.RELEVANCE) }
     var filtersExpanded by remember { mutableStateOf(true) }
+
+    // ---- Live API search (debounced) ----
+    val searchVm: com.cinenova.app.viewmodel.CatalogViewModel =
+        androidx.lifecycle.viewmodel.compose.viewModel()
+    val apiSearchState by searchVm.search.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(query) {
+        kotlinx.coroutines.delay(300)
+        if (query.isNotBlank()) searchVm.search(query)
+    }
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -112,22 +124,29 @@ fun ExploreScreen(
         Spacer(Modifier.height(Spacing.sm))
 
         when {
-            // ---- Active search ----
+            // ---- Active search (live API + local filters) ----
             query.isNotBlank() -> {
-                val results = DemoRepository.search(query)
-                    .filter { typeFilter == null || it.type == typeFilter }
-                    .let { list ->
-                        when (sort) {
-                            SortOption.RATING -> list.sortedByDescending { it.rating }
-                            SortOption.YEAR -> list.sortedByDescending { it.year }
-                            SortOption.RELEVANCE -> list
+                val state = apiSearchState
+                when (state) {
+                    is com.cinenova.app.viewmodel.CatalogViewModel.SearchUiState.Loading -> {
+                        LoadingSkeleton(lines = 6, hero = false)
+                    }
+                    is com.cinenova.app.viewmodel.CatalogViewModel.SearchUiState.Error -> {
+                        ErrorState(
+                            message = state.message,
+                            onRetry = { searchVm.search(query) },
+                        )
+                    }
+                    is com.cinenova.app.viewmodel.CatalogViewModel.SearchUiState.Results -> {
+                        val results = applyFilters(state.items, typeFilter, genre, sort)
+                        if (results.isEmpty()) {
+                            NoResultsState(query)
+                        } else {
+                            FilterBar(typeFilter, onType = { typeFilter = it }, genre = genre, onGenre = { genre = it }, showGenres = filtersExpanded)
+                            ResultsGrid(results, onOpenDetails)
                         }
                     }
-                if (results.isEmpty()) {
-                    NoResultsState(query)
-                } else {
-                    FilterBar(typeFilter, onType = { typeFilter = it }, genre = genre, onGenre = { genre = it }, showGenres = filtersExpanded)
-                    ResultsGrid(results.filter { genre == null || genre in it.genres }, onOpenDetails)
+                    else -> Unit
                 }
             }
 
@@ -243,6 +262,25 @@ private fun FilterBar(
         }
     }
 }
+
+/**
+ * Applies type / genre / sort controls to a result list client-side.
+ */
+private fun applyFilters(
+    items: List<com.cinenova.app.data.MediaItem>,
+    typeFilter: MediaType?,
+    genre: String?,
+    sort: SortOption,
+): List<com.cinenova.app.data.MediaItem> = items
+    .filter { typeFilter == null || it.type == typeFilter }
+    .filter { genre == null || genre in it.genres }
+    .let { list ->
+        when (sort) {
+            SortOption.RATING -> list.sortedByDescending { it.rating }
+            SortOption.YEAR -> list.sortedByDescending { it.year }
+            SortOption.RELEVANCE -> list
+        }
+    }
 
 /**
  * Adaptive poster grid — 2 columns on phones up to 7+ on desktop.

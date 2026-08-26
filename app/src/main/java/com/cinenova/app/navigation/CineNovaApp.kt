@@ -85,6 +85,14 @@ private val tabRoutes = bottomDestinations.map { it.route }.toSet()
  */
 @Composable
 fun CineNovaApp() {
+    // Bootstrap the upstream session once — captures the bearer token from
+    // the tab-operating exchange if upstream issues one.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.cinenova.app.di.ServiceLocator.catalogRepository.bootstrap() }
+        }
+    }
+
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route

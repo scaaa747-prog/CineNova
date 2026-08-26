@@ -50,12 +50,17 @@ fun HomeScreen(
     onOpenNotifications: () -> Unit,
     onOpenContinueWatching: () -> Unit,
 ) {
-    var loading by remember { mutableStateOf(true) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(600)
-        loading = false
-    }
     var offline by remember { mutableStateOf(false) }
+
+    // Memoize rails once — recomputing these on every recomposition caused jank.
+    val trending = remember { DemoRepository.trending }
+    val popularMovies = remember { DemoRepository.popularMovies }
+    val popularTv = remember { DemoRepository.popularTv }
+    val newReleases = remember { DemoRepository.newReleases }
+    val topRated = remember { DemoRepository.topRated.take(10) }
+    val recommended = remember { DemoRepository.recommended }
+    val recentlyAdded = remember { DemoRepository.recentlyAdded }
+    val becauseYouWatched = remember { DemoRepository.becauseYouWatched.take(8) }
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -70,24 +75,19 @@ fun HomeScreen(
         )
         OfflineBanner(visible = offline)
 
-        if (loading) {
-            LoadingSkeleton()
-            return@Column
-        }
-
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            item {
+            item(key = "hero") {
                 FeaturedHero(
-                    items = DemoRepository.trending.take(5),
+                    items = trending.take(5),
                     onPlay = { onPlay(it.id) },
                     onOpenDetails = { onOpenDetails(it.id) },
                 )
             }
 
-            item {
+            item(key = "continue-watching") {
                 ContinueWatchingRow(
                     onOpenDetails = onOpenDetails,
                     onPlay = onPlay,
@@ -95,18 +95,24 @@ fun HomeScreen(
                 )
             }
 
-            item {
-                ContentRow("Trending Now", DemoRepository.trending, { onOpenDetails(it.id) }, landscape = true)
+            item(key = "trending") {
+                ContentRow("Trending Now", trending, { onOpenDetails(it.id) }, landscape = true)
             }
-            item { ContentRow(title = "Popular Movies", items = DemoRepository.popularMovies, onOpenDetails = { onOpenDetails(it.id) }) }
-            item { ContentRow(title = "Popular TV Shows", items = DemoRepository.popularTv, onOpenDetails = { onOpenDetails(it.id) }) }
-            item { ContentRow(title = "New Releases", items = DemoRepository.newReleases, onOpenDetails = { onOpenDetails(it.id) }, landscape = true) }
-            item { ContentRow(title = "Top Rated", items = DemoRepository.topRated.take(10), onOpenDetails = { onOpenDetails(it.id) }) }
-            item { ContentRow(title = "Recommended For You", items = DemoRepository.recommended, onOpenDetails = { onOpenDetails(it.id) }) }
-            item { ContentRow(title = "Recently Added", items = DemoRepository.recentlyAdded, onOpenDetails = { onOpenDetails(it.id) }, landscape = true) }
-            item { ContentRow(title = "Because You Watched Midnight Horizon", items = DemoRepository.becauseYouWatched.take(8), onOpenDetails = { onOpenDetails(it.id) }) }
+            item(key = "popular-movies") { ContentRow("Popular Movies", popularMovies) { onOpenDetails(it.id) } }
+            item(key = "popular-tv") { ContentRow("Popular TV Shows", popularTv) { onOpenDetails(it.id) } }
+            item(key = "new-releases") {
+                ContentRow("New Releases", newReleases, { onOpenDetails(it.id) }, landscape = true)
+            }
+            item(key = "top-rated") { ContentRow("Top Rated", topRated) { onOpenDetails(it.id) } }
+            item(key = "recommended") { ContentRow("Recommended For You", recommended) { onOpenDetails(it.id) } }
+            item(key = "recently-added") {
+                ContentRow("Recently Added", recentlyAdded, { onOpenDetails(it.id) }, landscape = true)
+            }
+            item(key = "because-watched") {
+                ContentRow("Because You Watched Midnight Horizon", becauseYouWatched) { onOpenDetails(it.id) }
+            }
 
-            item { Spacer(Modifier.height(Spacing.lg)) }
+            item(key = "spacer") { Spacer(Modifier.height(Spacing.lg)) }
         }
     }
 }

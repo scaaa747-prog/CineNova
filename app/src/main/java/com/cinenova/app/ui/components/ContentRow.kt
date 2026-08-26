@@ -29,7 +29,7 @@ fun ContentRow(
             contentPadding = PaddingValues(horizontal = Spacing.md),
             horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            items(count = items.size) { index ->
+            items(count = items.size, key = { items[it].id }) { index ->
                 val item = items[index]
                 if (landscape) {
                     LandscapeMovieCard(item = item, onClick = { onOpenDetails(item) })

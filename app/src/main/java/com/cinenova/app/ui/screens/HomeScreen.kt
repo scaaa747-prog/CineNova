@@ -96,15 +96,15 @@ fun HomeScreen(
             }
 
             item {
-                ContentRow("Trending Now", DemoRepository.trending, onOpenDetails, landscape = true)
+                ContentRow("Trending Now", DemoRepository.trending, { onOpenDetails(it.id) }, landscape = true)
             }
-            item { ContentRow("Popular Movies", DemoRepository.popularMovies, onOpenDetails) }
-            item { ContentRow("Popular TV Shows", DemoRepository.popularTv, onOpenDetails) }
-            item { ContentRow("New Releases", DemoRepository.newReleases, onOpenDetails, landscape = true) }
-            item { ContentRow("Top Rated", DemoRepository.topRated.take(10), onOpenDetails) }
-            item { ContentRow("Recommended For You", DemoRepository.recommended, onOpenDetails) }
-            item { ContentRow("Recently Added", DemoRepository.recentlyAdded, onOpenDetails, landscape = true) }
-            item { ContentRow("Because You Watched Midnight Horizon", DemoRepository.becauseYouWatched.take(8), onOpenDetails) }
+            item { ContentRow(title = "Popular Movies", items = DemoRepository.popularMovies, onOpenDetails = { onOpenDetails(it.id) }) }
+            item { ContentRow(title = "Popular TV Shows", items = DemoRepository.popularTv, onOpenDetails = { onOpenDetails(it.id) }) }
+            item { ContentRow(title = "New Releases", items = DemoRepository.newReleases, onOpenDetails = { onOpenDetails(it.id) }, landscape = true) }
+            item { ContentRow(title = "Top Rated", items = DemoRepository.topRated.take(10), onOpenDetails = { onOpenDetails(it.id) }) }
+            item { ContentRow(title = "Recommended For You", items = DemoRepository.recommended, onOpenDetails = { onOpenDetails(it.id) }) }
+            item { ContentRow(title = "Recently Added", items = DemoRepository.recentlyAdded, onOpenDetails = { onOpenDetails(it.id) }, landscape = true) }
+            item { ContentRow(title = "Because You Watched Midnight Horizon", items = DemoRepository.becauseYouWatched.take(8), onOpenDetails = { onOpenDetails(it.id) }) }
 
             item { Spacer(Modifier.height(Spacing.lg)) }
         }

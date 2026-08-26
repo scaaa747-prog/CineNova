@@ -18,9 +18,11 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.PauseCircle
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -80,7 +82,6 @@ fun GenreChip(
         border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     )
 }
-}
 
 /** Primary filled play button with cinematic emphasis. */
 @Composable
@@ -88,7 +89,7 @@ fun PlayButton(title: String, onClick: () -> Unit, modifier: Modifier = Modifier
     FilledTonalButton(
         onClick = onClick,
         modifier = modifier.semantics { contentDescription = "Play $title" },
-        colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+        colors = ButtonDefaults.filledTonalButtonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
         ),

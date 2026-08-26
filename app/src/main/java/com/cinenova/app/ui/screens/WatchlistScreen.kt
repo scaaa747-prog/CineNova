@@ -67,7 +67,6 @@ fun WatchlistScreen(onOpenDetails: (String) -> Unit, onExplore: () -> Unit) {
             ListType.entries.forEach { type ->
                 GenreChip(label = type.label, selected = listType == type, onClick = { listType = type })
             }
-            Spacer(Modifier.height(0.dp))
             GenreChip(
                 label = if (sortNewestFirst) "Newest first" else "A – Z",
                 selected = false,

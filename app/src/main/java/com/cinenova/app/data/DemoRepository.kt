@@ -146,8 +146,8 @@ object DemoRepository {
         )
 
         catalog = movies + shows.map { it.first }
-        seasonMap = shows.toMap().mapValues { it.value.second } +
-            movies.associate { it.id to emptyList() }
+        seasonMap = shows.associate { it.first.id to it.second } +
+            movies.associate { it.id to emptyList<Season>() }
     }
 
     private val byId by lazy { catalog.associateBy { it.id } }
@@ -238,7 +238,7 @@ object DemoRepository {
                     item.title.lowercase().contains(q) ||
                         item.description.lowercase().contains(q) ||
                         item.genres.any { it.lowercase().contains(q) } ||
-                        castFor[item.id].any { it.name.lowercase().contains(q) }
+                        castFor.getValue(item.id).any { it.name.lowercase().contains(q) }
                     )
         }
     }

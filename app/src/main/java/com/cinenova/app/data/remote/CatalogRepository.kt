@@ -38,8 +38,11 @@ class MovieBoxCatalogRepository(
 ) : CatalogRepository {
 
     override suspend fun bootstrap(): ApiResult<TabOperatingDto> =
-        apiCall { api.tabOperating() }.map { envelope ->
-            envelope ?: TabOperatingDto()
+        when (val result = apiCall { api.tabOperating() }) {
+            is ApiResult.Success -> ApiResult.Success(result.value.data ?: TabOperatingDto())
+            is ApiResult.HttpError -> result
+            is ApiResult.NetworkError -> result
+            ApiResult.Empty -> ApiResult.Empty
         }
 
     override suspend fun search(keyword: String, perPage: Int): ApiResult<List<MediaItem>> =

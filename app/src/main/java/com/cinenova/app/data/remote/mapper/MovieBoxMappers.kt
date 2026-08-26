@@ -7,6 +7,7 @@ import com.cinenova.app.data.MediaType
 import com.cinenova.app.data.Season
 import com.cinenova.app.data.remote.PlaybackResources
 import com.cinenova.app.data.remote.StreamResource
+import com.cinenova.app.data.remote.dto.CastMemberDto
 import com.cinenova.app.data.remote.dto.EpisodeDto
 import com.cinenova.app.data.remote.dto.ResourceResponseDto
 import com.cinenova.app.data.remote.dto.SeasonDto

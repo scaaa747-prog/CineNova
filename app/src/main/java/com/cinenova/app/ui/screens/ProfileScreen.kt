@@ -3,6 +3,7 @@ package com.cinenova.app.ui.screens
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -159,7 +161,7 @@ fun ProfileScreen(onManageDownloads: () -> Unit) {
         )
         ToggleSetting("Download over Wi-Fi only", AppStore.wifiOnlyDownloads, icon = Icons.Outlined.Wifi)
         SettingItem(
-            icon = Icons.Outlined.Storage2,
+            icon = Icons.Outlined.Storage,
             title = "Manage downloads",
             subtitle = "Storage usage and offline titles",
             onClick = onManageDownloads,

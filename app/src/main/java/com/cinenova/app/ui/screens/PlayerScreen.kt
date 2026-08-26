@@ -157,10 +157,7 @@ fun PlayerScreen(itemId: String, onBack: () -> Unit) {
     ) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    player = player
-                }
+                PlayerView(ctx).apply { useController = false }
             },
             update = { view -> view.player = player },
             modifier = Modifier

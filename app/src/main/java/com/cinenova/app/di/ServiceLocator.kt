@@ -4,22 +4,15 @@ import com.cinenova.app.data.remote.CatalogRepository
 import com.cinenova.app.data.remote.MovieBoxApi
 import com.cinenova.app.data.remote.MovieBoxClientFactory
 import com.cinenova.app.data.remote.MovieBoxCatalogRepository
-import com.cinenova.app.data.remote.NoOpRequestAuthProvider
+import com.cinenova.app.data.remote.MovieBoxRequestAuthProvider
 import com.cinenova.app.data.remote.RequestAuthProvider
 
 /**
- * Minimal service locator. Swap [authProvider] for the authorized signing
- * implementation when available — nothing else in the app changes.
+ * Minimal service locator configured with the MovieBoxRequestAuthProvider.
  */
 object ServiceLocator {
 
-    /**
-     * ┌──────────────────────────────────────────────────────────────┐
-     * │ INJECTION POINT                                              │
-     * │ Replace with the real RequestAuthProvider implementation.    │
-     * └──────────────────────────────────────────────────────────────┘
-     */
-    val authProvider: RequestAuthProvider = NoOpRequestAuthProvider()
+    val authProvider: RequestAuthProvider = MovieBoxRequestAuthProvider()
 
     val api: MovieBoxApi by lazy { MovieBoxClientFactory.create(authProvider) }
 

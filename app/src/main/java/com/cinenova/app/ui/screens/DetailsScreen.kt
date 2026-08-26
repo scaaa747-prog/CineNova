@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,18 +53,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.cinenova.app.data.AppStore
+import com.cinenova.app.data.CastMember
 import com.cinenova.app.data.DemoRepository
 import com.cinenova.app.data.MediaItem
 import com.cinenova.app.data.MediaType
+import com.cinenova.app.data.Season
+import com.cinenova.app.data.remote.ApiResult
+import com.cinenova.app.di.ServiceLocator
 import com.cinenova.app.ui.components.EpisodeCard
 import com.cinenova.app.ui.components.GenreChip
+import com.cinenova.app.ui.components.LoadingSkeleton
 import com.cinenova.app.ui.components.RatingBadge
 import com.cinenova.app.ui.components.SeasonSelector
 import com.cinenova.app.ui.theme.Spacing
 
 /**
  * Cinematic details screen for movies and TV shows.
- * Phones use a vertical layout; wide screens get a two-column layout.
+ * Supports both local demo catalog and live API subjects.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,13 +79,58 @@ fun DetailsScreen(
     onPlay: (String) -> Unit,
     onOpenDetails: (String) -> Unit,
 ) {
-    val item = remember(itemId) { DemoRepository.item(itemId) } ?: return
+    var liveItem by remember(itemId) { mutableStateOf(DemoRepository.item(itemId)) }
+    var liveSeasons by remember(itemId) { mutableStateOf<List<Season>>(emptyList()) }
+    var liveCast by remember(itemId) { mutableStateOf<List<CastMember>>(emptyList()) }
+    var isLoading by remember(itemId) { mutableStateOf(liveItem == null) }
+
+    LaunchedEffect(itemId) {
+        val subjectId = itemId.toLongOrNull()
+        if (subjectId != null) {
+            when (val result = ServiceLocator.catalogRepository.subjectDetail(subjectId)) {
+                is ApiResult.Success -> {
+                    liveItem = result.value
+                    val seasonsRes = ServiceLocator.catalogRepository.seasonsOf(subjectId)
+                    val castRes = ServiceLocator.catalogRepository.castOf(subjectId)
+                    liveSeasons = seasonsRes.getOrNull().orEmpty()
+                    liveCast = castRes.getOrNull().orEmpty()
+                    isLoading = false
+                }
+                else -> {
+                    isLoading = false
+                }
+            }
+        } else {
+            isLoading = false
+        }
+    }
+
+    if (isLoading && liveItem == null) {
+        Box(Modifier.fillMaxSize()) {
+            LoadingSkeleton(lines = 8, hero = true)
+            TopAppBar(
+                title = {},
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            )
+        }
+        return
+    }
+
+    val item = liveItem ?: return
     var inWatchlist by remember(itemId) { mutableStateOf(AppStore.isInWatchlist(item.id)) }
     var downloadState by remember(itemId) {
         mutableStateOf(AppStore.downloadEntry(item.id)?.state)
     }
     var selectedSeason by remember { mutableIntStateOf(1) }
-    val seasons = remember(itemId) { DemoRepository.episodesOf(item) }
+    val seasons = if (liveSeasons.isNotEmpty()) liveSeasons else DemoRepository.episodesOf(item)
+    val castMembers = if (liveCast.isNotEmpty()) liveCast else DemoRepository.castFor[item.id].orEmpty()
+    val trailers = DemoRepository.trailersFor[item.id].orEmpty()
+    val reviews = DemoRepository.reviewsFor[item.id].orEmpty()
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize()) {
@@ -91,7 +142,7 @@ fun DetailsScreen(
                         .aspectRatio(if (LocalConfiguration.current.screenWidthDp >= 600) 21f / 9f else 16f / 9f),
                 ) {
                     AsyncImage(
-                        model = item.backdropUrl,
+                        model = item.backdropUrl.ifEmpty { item.posterUrl },
                         contentDescription = "Cinematic backdrop for ${item.title}",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
@@ -111,59 +162,60 @@ fun DetailsScreen(
 
             item {
                 Column(Modifier.padding(horizontal = Spacing.md)) {
-                    // ---- Poster + meta ----
-                    Row(verticalAlignment = Alignment.Top) {
-                        Surface(shape = MaterialTheme.shapes.medium, modifier = Modifier.width(110.dp)) {
-                            AsyncImage(
-                                model = item.posterUrl,
-                                contentDescription = "Movie poster for ${item.title}",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(2f / 3f),
-                            )
-                        }
-                        Spacer(Modifier.width(Spacing.md))
-                        Column {
-                            RatingBadge(item.rating)
-                            Spacer(Modifier.height(Spacing.xs))
-                            Text(
-                                listOfNotNull(
-                                    "${item.year}",
-                                    if (item.type == MediaType.TV) "Series" else "${item.runtimeMinutes} min",
-                                    item.ageRating,
-                                ).joinToString("  ·  "),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                item.genres.joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(Spacing.md))
-                    Text(item.title, style = MaterialTheme.typography.headlineMedium)
-                    Spacer(Modifier.height(Spacing.sm))
                     Text(
-                        item.description,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        item.title,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
                     )
+                    Spacer(Modifier.height(Spacing.xs))
 
-                    Spacer(Modifier.height(Spacing.md))
-
-                    // ---- Genre chips ----
+                    // ---- Metadata row ----
                     Row(
-                        Modifier.horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
-                        item.genres.forEach { GenreChip(it, selected = false, onClick = {}) }
+                        if (item.year > 0) {
+                            Text("${item.year}", style = MaterialTheme.typography.labelLarge)
+                        }
+                        Surface(
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                            Text(
+                                item.ageRating,
+                                Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                        if (item.runtimeMinutes > 0) {
+                            Text("${item.runtimeMinutes} min", style = MaterialTheme.typography.labelLarge)
+                        }
+                        if (item.rating > 0.0) {
+                            RatingBadge(item.rating)
+                        }
                     }
 
-                    Spacer(Modifier.height(Spacing.md))
+                    Spacer(Modifier.height(Spacing.sm))
+
+                    if (item.description.isNotBlank()) {
+                        Text(
+                            item.description,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(Spacing.md))
+                    }
+
+                    // ---- Genre chips ----
+                    if (item.genres.isNotEmpty()) {
+                        Row(
+                            Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        ) {
+                            item.genres.forEach { GenreChip(it, selected = false, onClick = {}) }
+                        }
+                        Spacer(Modifier.height(Spacing.md))
+                    }
 
                     // ---- Primary actions ----
                     Row(
@@ -219,80 +271,84 @@ fun DetailsScreen(
                     }
 
                     // ---- Cast & Crew ----
-                    Text("Cast & Crew", style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(Spacing.sm))
-                    Row(
-                        Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                    ) {
-                        DemoRepository.castFor.getValue(item.id).forEach { member ->
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                AsyncImage(
-                                    model = member.avatarUrl,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(CircleShape),
-                                )
-                                Spacer(Modifier.height(Spacing.xs))
-                                Text(member.name, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                                Text(
-                                    member.role,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                    if (castMembers.isNotEmpty()) {
+                        Text("Cast & Crew", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(Spacing.sm))
+                        Row(
+                            Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                        ) {
+                            castMembers.forEach { member ->
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    AsyncImage(
+                                        model = member.avatarUrl,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(72.dp)
+                                            .clip(CircleShape),
+                                    )
+                                    Spacer(Modifier.height(Spacing.xs))
+                                    Text(member.name, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                                    Text(
+                                        member.role,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                         }
+                        Spacer(Modifier.height(Spacing.lg))
                     }
-
-                    Spacer(Modifier.height(Spacing.lg))
 
                     // ---- Trailers ----
-                    Text("Trailers & Extras", style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(Spacing.sm))
-                    DemoRepository.trailersFor.getValue(item.id).forEach { trailer ->
-                        Row(
-                            Modifier.padding(vertical = Spacing.xs),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                        ) {
-                            Icon(
-                                Icons.Outlined.PlayArrow,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                            Text("${trailer.title} · ${trailer.durationMinutes}:${if (trailer.durationMinutes < 10) "0${trailer.durationMinutes}" else "00"}",
-                                style = MaterialTheme.typography.bodyMedium)
+                    if (trailers.isNotEmpty()) {
+                        Text("Trailers & Extras", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(Spacing.sm))
+                        trailers.forEach { trailer ->
+                            Row(
+                                Modifier.padding(vertical = Spacing.xs),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.PlayArrow,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                                Text("${trailer.title} · ${trailer.durationMinutes}:00",
+                                    style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
+                        Spacer(Modifier.height(Spacing.lg))
                     }
 
-                    Spacer(Modifier.height(Spacing.lg))
-
                     // ---- Reviews ----
-                    Text("Reviews", style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(Spacing.sm))
-                    DemoRepository.reviewsFor.getValue(item.id).forEach { review ->
-                        Column(Modifier.padding(vertical = Spacing.xs)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(review.author, style = MaterialTheme.typography.titleSmall)
-                                Spacer(Modifier.width(Spacing.sm))
-                                RatingBadge(review.rating)
-                                Spacer(Modifier.weight(1f))
-                                Text(
-                                    review.date,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                    if (reviews.isNotEmpty()) {
+                        Text("Reviews", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(Spacing.sm))
+                        reviews.forEach { review ->
+                            Column(Modifier.padding(vertical = Spacing.xs)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(review.author, style = MaterialTheme.typography.titleSmall)
+                                    Spacer(Modifier.width(Spacing.sm))
+                                    RatingBadge(review.rating)
+                                    Spacer(Modifier.weight(1f))
+                                    Text(
+                                        review.date,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Text(review.text, style = MaterialTheme.typography.bodyMedium)
                             }
-                            Text(review.text, style = MaterialTheme.typography.bodyMedium)
+                            HorizontalDivider(
+                                Modifier.padding(vertical = Spacing.sm),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
                         }
-                        HorizontalDivider(
-                            Modifier.padding(vertical = Spacing.sm),
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                        )
                     }
 
                     // ---- More Like This ----

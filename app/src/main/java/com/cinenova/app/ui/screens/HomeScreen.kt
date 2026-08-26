@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Badge
@@ -20,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,16 +33,18 @@ import com.cinenova.app.data.AppStore
 import com.cinenova.app.data.DemoRepository
 import com.cinenova.app.data.MediaItem
 import com.cinenova.app.data.WatchProgress
+import com.cinenova.app.data.remote.ApiResult
+import com.cinenova.app.data.remote.dto.TabSectionDto
+import com.cinenova.app.data.remote.mapper.toMediaItem
+import com.cinenova.app.di.ServiceLocator
 import com.cinenova.app.ui.components.ContentRow
 import com.cinenova.app.ui.components.ContinueWatchingCard
 import com.cinenova.app.ui.components.FeaturedHero
-import com.cinenova.app.ui.components.LoadingSkeleton
 import com.cinenova.app.ui.components.OfflineBanner
 import com.cinenova.app.ui.theme.Spacing
 
 /**
- * Immersive streaming Home: hero carousel + content rails.
- * Demonstrates loading / success states.
+ * Immersive streaming Home: hero carousel + dynamic live API content rails.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,8 +55,10 @@ fun HomeScreen(
     onOpenContinueWatching: () -> Unit,
 ) {
     var offline by remember { mutableStateOf(false) }
+    var liveSections by remember { mutableStateOf<List<TabSectionDto>>(emptyList()) }
+    var heroItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
 
-    // Memoize rails once — recomputing these on every recomposition caused jank.
+    // Fallback demo rails
     val trending = remember { DemoRepository.trending }
     val popularMovies = remember { DemoRepository.popularMovies }
     val popularTv = remember { DemoRepository.popularTv }
@@ -61,6 +67,38 @@ fun HomeScreen(
     val recommended = remember { DemoRepository.recommended }
     val recentlyAdded = remember { DemoRepository.recentlyAdded }
     val becauseYouWatched = remember { DemoRepository.becauseYouWatched.take(8) }
+
+    LaunchedEffect(Unit) {
+        when (val result = ServiceLocator.catalogRepository.bootstrap()) {
+            is ApiResult.Success -> {
+                offline = false
+                val sections = result.value.items.orEmpty()
+                liveSections = sections
+
+                // Extract banner items for hero
+                val banners = sections.firstOrNull { it.type == "BANNER" }?.banner?.banners.orEmpty()
+                val bannerMedia = banners.mapNotNull { b ->
+                    b.subject?.toMediaItem() ?: b.subjectId?.let { id ->
+                        MediaItem(
+                            id = id,
+                            title = b.content.orEmpty(),
+                            posterUrl = b.image?.url.orEmpty(),
+                            backdropUrl = b.image?.url.orEmpty(),
+                        )
+                    }
+                }
+                if (bannerMedia.isNotEmpty()) {
+                    heroItems = bannerMedia
+                }
+            }
+            is ApiResult.NetworkError -> {
+                offline = true
+            }
+            else -> Unit
+        }
+    }
+
+    val displayHero = if (heroItems.isNotEmpty()) heroItems else trending.take(5)
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -81,7 +119,7 @@ fun HomeScreen(
         ) {
             item(key = "hero") {
                 FeaturedHero(
-                    items = trending.take(5),
+                    items = displayHero,
                     onPlay = { onPlay(it.id) },
                     onOpenDetails = { onOpenDetails(it.id) },
                 )
@@ -95,21 +133,40 @@ fun HomeScreen(
                 )
             }
 
-            item(key = "trending") {
-                ContentRow("Trending Now", trending, { onOpenDetails(it.id) }, landscape = true)
+            // Live API Sections if available
+            val movieSections = liveSections.filter {
+                it.type == "SUBJECTS_MOVIE" && !it.subjects.isNullOrEmpty()
             }
-            item(key = "popular-movies") { ContentRow("Popular Movies", popularMovies, onOpenDetails = { onOpenDetails(it.id) }) }
-            item(key = "popular-tv") { ContentRow("Popular TV Shows", popularTv, onOpenDetails = { onOpenDetails(it.id) }) }
-            item(key = "new-releases") {
-                ContentRow("New Releases", newReleases, { onOpenDetails(it.id) }, landscape = true)
-            }
-            item(key = "top-rated") { ContentRow("Top Rated", topRated, onOpenDetails = { onOpenDetails(it.id) }) }
-            item(key = "recommended") { ContentRow("Recommended For You", recommended, onOpenDetails = { onOpenDetails(it.id) }) }
-            item(key = "recently-added") {
-                ContentRow("Recently Added", recentlyAdded, { onOpenDetails(it.id) }, landscape = true)
-            }
-            item(key = "because-watched") {
-                ContentRow("Because You Watched Midnight Horizon", becauseYouWatched, onOpenDetails = { onOpenDetails(it.id) })
+
+            if (movieSections.isNotEmpty()) {
+                items(movieSections, key = { it.title ?: it.position.toString() }) { sec ->
+                    val items = sec.subjects.orEmpty().map { it.toMediaItem() }
+                    val isLandscape = sec.position == 1 || sec.position == 3
+                    ContentRow(
+                        title = sec.title ?: "Trending",
+                        items = items,
+                        onOpenDetails = { onOpenDetails(it.id) },
+                        landscape = isLandscape,
+                    )
+                }
+            } else {
+                // Fallback default rails
+                item(key = "trending") {
+                    ContentRow("Trending Now", trending, { onOpenDetails(it.id) }, landscape = true)
+                }
+                item(key = "popular-movies") { ContentRow("Popular Movies", popularMovies, onOpenDetails = { onOpenDetails(it.id) }) }
+                item(key = "popular-tv") { ContentRow("Popular TV Shows", popularTv, onOpenDetails = { onOpenDetails(it.id) }) }
+                item(key = "new-releases") {
+                    ContentRow("New Releases", newReleases, { onOpenDetails(it.id) }, landscape = true)
+                }
+                item(key = "top-rated") { ContentRow("Top Rated", topRated, onOpenDetails = { onOpenDetails(it.id) }) }
+                item(key = "recommended") { ContentRow("Recommended For You", recommended, onOpenDetails = { onOpenDetails(it.id) }) }
+                item(key = "recently-added") {
+                    ContentRow("Recently Added", recentlyAdded, { onOpenDetails(it.id) }, landscape = true)
+                }
+                item(key = "because-watched") {
+                    ContentRow("Because You Watched Midnight Horizon", becauseYouWatched, onOpenDetails = { onOpenDetails(it.id) })
+                }
             }
 
             item(key = "spacer") { Spacer(Modifier.height(Spacing.lg)) }
@@ -155,7 +212,6 @@ private fun ContinueWatchingRow(
                     progress = progress,
                     onResume = { onPlay(item.id) },
                     onRemove = {
-                        // Demo scope: removal is a no-op placeholder in static demo data.
                         onOpenDetails(item.id)
                     },
                 )

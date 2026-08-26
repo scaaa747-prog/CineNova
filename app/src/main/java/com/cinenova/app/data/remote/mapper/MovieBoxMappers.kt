@@ -15,27 +15,25 @@ import com.cinenova.app.data.remote.dto.SubjectDetailDto
 import com.cinenova.app.data.remote.dto.SubjectDetailResponseDto
 import com.cinenova.app.data.remote.dto.SubjectSummaryDto
 
-/**
- * Mappers from wire DTOs to the app's existing domain models.
- * All fields are nullable upstream — defaults keep the UI stable.
- */
-
-private const val CATEGORY_MOVIE = 1 // adjust if needed after inspecting payloads
+private const val CATEGORY_MOVIE = 1
+private const val CATEGORY_TV = 2
 
 fun SubjectSummaryDto.toMediaItem(): MediaItem = MediaItem(
-    id = resolvedId().toString().ifEmpty { resolvedTitle() },
+    id = resolvedId().ifEmpty { resolvedTitle() },
     title = resolvedTitle(),
     year = resolvedYear(),
     rating = resolvedRating(),
     ageRating = "NR",
-    runtimeMinutes = durationMinutes ?: 0,
-    genres = genres.orEmpty(),
+    runtimeMinutes = (seconds ?: 0) / 60,
+    genres = resolvedGenres(),
     description = description.orEmpty(),
-    type = category.toMediaTypeOrDefault(),
+    posterUrl = resolvedPoster() ?: "",
+    backdropUrl = resolvedBackdrop() ?: resolvedPoster() ?: "",
+    type = (subjectType ?: category).toMediaTypeOrDefault(),
 )
 
 fun SubjectDetailDto.toMediaItem(): MediaItem = MediaItem(
-    id = resolvedId().toString(),
+    id = resolvedId(),
     title = resolvedTitle(),
     year = resolvedYear(),
     rating = resolvedRating(),
@@ -43,28 +41,32 @@ fun SubjectDetailDto.toMediaItem(): MediaItem = MediaItem(
     runtimeMinutes = resolvedRuntime(),
     genres = resolvedGenres(),
     description = resolvedDescription(),
-    type = category.toMediaTypeOrDefault(),
+    posterUrl = resolvedPoster() ?: "",
+    backdropUrl = resolvedBackdrop() ?: resolvedPoster() ?: "",
+    type = (subjectType ?: category).toMediaTypeOrDefault(),
 )
 
-/** Flattened detail response → domain model. */
 fun SubjectDetailResponseDto.toMediaItem(subjectId: Long): MediaItem {
-    val detail = subject
-    return MediaItem(
-        id = (detail?.resolvedId() ?: subjectId).toString(),
-        title = resolvedTitle(),
-        year = detail?.resolvedYear() ?: year ?: 0,
-        rating = detail?.resolvedRating() ?: score ?: 0.0,
-        ageRating = detail?.ageRating ?: detail?.mpa ?: "NR",
-        runtimeMinutes = detail?.resolvedRuntime() ?: 0,
-        genres = detail?.resolvedGenres() ?: genres.orEmpty(),
-        description = detail?.resolvedDescription() ?: description.orEmpty(),
-        type = (detail?.category ?: category).toMediaTypeOrDefault(),
+    val detail = resolvedDetail()
+    return detail?.toMediaItem() ?: MediaItem(
+        id = subjectId.toString(),
+        title = "",
+        year = 0,
+        rating = 0.0,
+        ageRating = "NR",
+        runtimeMinutes = 0,
+        genres = emptyList(),
+        description = "",
+        posterUrl = "",
+        backdropUrl = "",
+        type = MediaType.MOVIE,
     )
 }
 
 fun CastMemberDto.toCastMember(): CastMember = CastMember(
     name = name.orEmpty(),
     role = resolvedRole(),
+    avatarUrl = resolvedAvatar() ?: "",
 )
 
 fun SeasonDto.toSeason(): Season = Season(
@@ -79,40 +81,29 @@ fun EpisodeDto.toEpisode(seasonNumber: Int): Episode = Episode(
     title = title ?: "Episode ${resolvedNumber()}",
     runtimeMinutes = resolvedRuntime(),
     description = description.orEmpty(),
+    thumbnailUrl = resolvedThumb() ?: "",
 )
 
-/**
- * Resource response → [com.cinenova.app.data.remote.PlaybackResources].
- * Only metadata + links already returned by upstream are surfaced; nothing
- * here modifies or circumvents access controls.
- */
 fun ResourceResponseDto.toPlaybackResources(
     subjectId: Long,
     season: Int,
     episode: Int,
-): com.cinenova.app.data.remote.PlaybackResources {
-    val direct = itemsOrEmpty()
-    val fromEpisodes = episodes
-        .orEmpty()
-        .filter { matchesEpisode(it.season, it.episode, season, episode) }
-        .flatMap { it.resources.orEmpty() }
-
-    val sources = (direct + fromEpisodes)
-        .mapNotNull { item ->
-            item.resolvedUrl()?.let { url ->
-                StreamResource(
-                    url = url,
-                    qualityLabel = item.resolvedQualityLabel(),
-                    sizeBytes = item.resolvedSizeBytes(),
-                    format = item.format ?: item.codec,
-                    season = item.season ?: season,
-                    episode = item.episode ?: episode,
-                )
-            }
+): PlaybackResources {
+    val items = itemsOrEmpty()
+    val sources = items.mapNotNull { item ->
+        item.resolvedUrl()?.let { url ->
+            StreamResource(
+                url = url,
+                qualityLabel = item.resolvedQualityLabel(),
+                sizeBytes = item.resolvedSizeBytes(),
+                format = item.format ?: item.codecName,
+                season = item.season ?: season,
+                episode = item.episode ?: episode,
+            )
         }
-        .distinctBy { it.url }
+    }.distinctBy { it.url }
 
-    return com.cinenova.app.data.remote.PlaybackResources(
+    return PlaybackResources(
         subjectId = subjectId,
         season = season,
         episode = episode,
@@ -120,11 +111,7 @@ fun ResourceResponseDto.toPlaybackResources(
     )
 }
 
-private fun matchesEpisode(actualSe: Int?, actualEp: Int?, wantedSe: Int, wantedEp: Int): Boolean =
-    (actualSe == null || actualSe == wantedSe) && (actualEp == null || actualEp == wantedEp)
-
 private fun Int?.toMediaTypeOrDefault(): MediaType = when (this) {
-    CATEGORY_MOVIE -> MediaType.MOVIE
-    null -> MediaType.MOVIE
-    else -> MediaType.TV
+    CATEGORY_TV -> MediaType.TV
+    else -> MediaType.MOVIE
 }

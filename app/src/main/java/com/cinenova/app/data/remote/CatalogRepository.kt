@@ -58,12 +58,12 @@ class MovieBoxCatalogRepository(
 
     override suspend fun seasonsOf(subjectId: Long): ApiResult<List<Season>> =
         apiCall { api.getSubject(subjectId) }.map { response ->
-            response?.seasons.orEmpty().map { it.toSeason() }
+            (response?.resolvedDetail()?.seasons ?: response?.seasons).orEmpty().map { it.toSeason() }
         }
 
     override suspend fun castOf(subjectId: Long): ApiResult<List<CastMember>> =
         apiCall { api.getSubject(subjectId) }.map { response ->
-            response?.resolvedCast().orEmpty().map { it.toCastMember() }
+            (response?.resolvedDetail()?.resolvedCast() ?: emptyList()).map { it.toCastMember() }
         }
 
     override suspend fun playbackResources(

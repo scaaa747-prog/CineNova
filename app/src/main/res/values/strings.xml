@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">CineNova</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_explore">Explore</string>
+    <string name="nav_downloads">Downloads</string>
+    <string name="nav_watchlist">Watchlist</string>
+    <string name="nav_profile">Profile</string>
+    <string name="cd_movie_poster">Movie poster for %1$s</string>
+    <string name="cd_backdrop">Cinematic backdrop for %1$s</string>
+    <string name="cd_play">Play %1$s</string>
+    <string name="cd_watchlist_toggle">Toggle watchlist for %1$s</string>
+    <string name="cd_download_toggle">Toggle download for %1$s</string>
+    <string name="empty_watchlist_title">Your watchlist is empty</string>
+    <string name="empty_search_title">No results found</string>
+</resources>

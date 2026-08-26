@@ -98,18 +98,18 @@ fun HomeScreen(
             item(key = "trending") {
                 ContentRow("Trending Now", trending, { onOpenDetails(it.id) }, landscape = true)
             }
-            item(key = "popular-movies") { ContentRow("Popular Movies", popularMovies) { onOpenDetails(it.id) } }
-            item(key = "popular-tv") { ContentRow("Popular TV Shows", popularTv) { onOpenDetails(it.id) } }
+            item(key = "popular-movies") { ContentRow("Popular Movies", popularMovies, onOpenDetails = { onOpenDetails(it.id) }) }
+            item(key = "popular-tv") { ContentRow("Popular TV Shows", popularTv, onOpenDetails = { onOpenDetails(it.id) }) }
             item(key = "new-releases") {
                 ContentRow("New Releases", newReleases, { onOpenDetails(it.id) }, landscape = true)
             }
-            item(key = "top-rated") { ContentRow("Top Rated", topRated) { onOpenDetails(it.id) } }
-            item(key = "recommended") { ContentRow("Recommended For You", recommended) { onOpenDetails(it.id) } }
+            item(key = "top-rated") { ContentRow("Top Rated", topRated, onOpenDetails = { onOpenDetails(it.id) }) }
+            item(key = "recommended") { ContentRow("Recommended For You", recommended, onOpenDetails = { onOpenDetails(it.id) }) }
             item(key = "recently-added") {
                 ContentRow("Recently Added", recentlyAdded, { onOpenDetails(it.id) }, landscape = true)
             }
             item(key = "because-watched") {
-                ContentRow("Because You Watched Midnight Horizon", becauseYouWatched) { onOpenDetails(it.id) }
+                ContentRow("Because You Watched Midnight Horizon", becauseYouWatched, onOpenDetails = { onOpenDetails(it.id) })
             }
 
             item(key = "spacer") { Spacer(Modifier.height(Spacing.lg)) }

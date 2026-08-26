@@ -6,22 +6,23 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 /**
- * Builds the OkHttp client + Retrofit service with the interceptor chain:
+ * Builds the resilient OkHttp client + Retrofit service:
  *
- *     RequestAuthInterceptor → HostFailoverInterceptor → network
+ *   HostFailoverInterceptor -> BearerAuthInterceptor -> RequestAuthInterceptor -> ResponseTokenCaptureInterceptor
  *
- * (Auth runs first so signature providers observe the final URL.)
+ * Configured with generous timeouts (30s connect, 45s read) and automatic connection retry for low network coverage.
  */
 object MovieBoxClientFactory {
 
     fun createOkHttp(authProvider: RequestAuthProvider): OkHttpClient =
         OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .addInterceptor(RequestAuthInterceptor(authProvider))
-            .addInterceptor(BearerAuthInterceptor())
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .writeTimeout(45, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .addInterceptor(HostFailoverInterceptor())
+            .addInterceptor(BearerAuthInterceptor())
+            .addInterceptor(RequestAuthInterceptor(authProvider))
             .addInterceptor(ResponseTokenCaptureInterceptor())
             .build()
 

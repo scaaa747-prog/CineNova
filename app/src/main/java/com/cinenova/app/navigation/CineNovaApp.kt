@@ -1,11 +1,11 @@
 package com.cinenova.app.navigation
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DownloadDone
@@ -13,8 +13,6 @@ import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material.icons.outlined.Bookmark
-import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
@@ -26,6 +24,7 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -45,11 +44,13 @@ import com.cinenova.app.ui.screens.HomeScreen
 import com.cinenova.app.ui.screens.NotificationsScreen
 import com.cinenova.app.ui.screens.PlayerScreen
 import com.cinenova.app.ui.screens.ProfileScreen
+import com.cinenova.app.ui.screens.SearchScreen
 import com.cinenova.app.ui.screens.WatchlistScreen
 
 object Routes {
     const val HOME = "home"
     const val EXPLORE = "explore"
+    const val SEARCH = "search"
     const val DOWNLOADS = "downloads"
     const val WATCHLIST = "watchlist"
     const val PROFILE = "profile"
@@ -85,65 +86,73 @@ private val tabRoutes = bottomDestinations.map { it.route }.toSet()
  */
 @Composable
 fun CineNovaApp() {
-    // Bootstrap the upstream session once — captures the bearer token from
-    // the tab-operating exchange if upstream issues one.
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching { com.cinenova.app.di.ServiceLocator.catalogRepository.bootstrap() }
-        }
+        com.cinenova.app.di.ServiceLocator.catalogRepository.bootstrap()
     }
 
     val navController = rememberNavController()
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val expanded = maxWidth >= 600.dp
+    val adaptiveInfo = currentWindowAdaptiveInfo()
+    val isExpanded = adaptiveInfo.windowSizeClass.windowWidthSizeClass ==
+        androidx.window.core.layout.WindowWidthSizeClass.EXPANDED ||
+        adaptiveInfo.windowSizeClass.windowWidthSizeClass ==
+        androidx.window.core.layout.WindowWidthSizeClass.MEDIUM
 
-        if (expanded) {
-            Row(Modifier.fillMaxSize()) {
-                NavigationRail {
-                    bottomDestinations.forEach { destination ->
-                        NavigationRailItem(
-                            selected = currentRoute == destination.route,
-                            onClick = { navigateToTab(navController, destination.route) },
-                            icon = {
-                                Icon(
-                                    if (currentRoute == destination.route) destination.selectedIcon else destination.icon,
-                                    contentDescription = destination.label,
-                                )
-                            },
-                            label = { Text(destination.label) },
-                        )
-                    }
-                }
-                Box(Modifier.weight(1f)) {
-                    AppNavHost(navController, currentRoute)
+    val showBars = currentRoute in tabRoutes
+
+    if (isExpanded && showBars) {
+        Row(Modifier.fillMaxSize()) {
+            NavigationRail(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .widthIn(min = 80.dp),
+            ) {
+                bottomDestinations.forEach { dest ->
+                    val selected = currentRoute == dest.route
+                    NavigationRailItem(
+                        selected = selected,
+                        onClick = { navigateToTab(navController, dest.route) },
+                        icon = {
+                            Icon(
+                                if (selected) dest.selectedIcon else dest.icon,
+                                contentDescription = dest.label,
+                            )
+                        },
+                        label = { Text(dest.label) },
+                    )
                 }
             }
-        } else {
-            Scaffold(
-                bottomBar = {
+            Box(Modifier.weight(1f)) {
+                AppNavHost(navController, currentRoute)
+            }
+        }
+    } else {
+        Scaffold(
+            bottomBar = {
+                if (showBars) {
                     NavigationBar {
-                        bottomDestinations.forEach { destination ->
+                        bottomDestinations.forEach { dest ->
+                            val selected = currentRoute == dest.route
                             NavigationBarItem(
-                                selected = currentRoute == destination.route,
-                                onClick = { navigateToTab(navController, destination.route) },
+                                selected = selected,
+                                onClick = { navigateToTab(navController, dest.route) },
                                 icon = {
                                     Icon(
-                                        if (currentRoute == destination.route) destination.selectedIcon else destination.icon,
-                                        contentDescription = destination.label,
+                                        if (selected) dest.selectedIcon else dest.icon,
+                                        contentDescription = dest.label,
                                     )
                                 },
-                                label = { Text(destination.label) },
+                                label = { Text(dest.label) },
                             )
                         }
                     }
-                },
-            ) { innerPadding ->
-                Box(Modifier.padding(innerPadding)) {
-                    AppNavHost(navController, currentRoute)
                 }
+            },
+        ) { innerPadding ->
+            Box(Modifier.padding(innerPadding)) {
+                AppNavHost(navController, currentRoute)
             }
         }
     }
@@ -168,6 +177,7 @@ private fun AppNavHost(
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeScreen(
+                onOpenSearch = { navController.navigate(Routes.SEARCH) },
                 onOpenDetails = { navController.navigate(Routes.details(it)) },
                 onPlay = { navController.navigate(Routes.player(it)) },
                 onOpenNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
@@ -176,6 +186,12 @@ private fun AppNavHost(
         }
         composable(Routes.EXPLORE) {
             ExploreScreen(onOpenDetails = { navController.navigate(Routes.details(it)) })
+        }
+        composable(Routes.SEARCH) {
+            SearchScreen(
+                onBack = { navController.popBackStack() },
+                onOpenDetails = { navController.navigate(Routes.details(it)) },
+            )
         }
         composable(Routes.DOWNLOADS) {
             DownloadsScreen(
@@ -199,22 +215,27 @@ private fun AppNavHost(
                 itemId = itemId,
                 onBack = { navController.popBackStack() },
                 onPlay = { navController.navigate(Routes.player(it)) },
-                onOpenDetails = { navController.navigate(Routes.details(it)) },
             )
         }
         composable(Routes.PLAYER) { entry ->
             val itemId = entry.arguments?.getString("itemId") ?: return@composable
-            PlayerScreen(itemId = itemId, onBack = { navController.popBackStack() })
+            PlayerScreen(
+                itemId = itemId,
+                onBack = { navController.popBackStack() },
+            )
         }
         composable(Routes.CONTINUE_WATCHING) {
             ContinueWatchingScreen(
                 onBack = { navController.popBackStack() },
-                onResume = { navController.navigate(Routes.player(it)) },
+                onPlay = { navController.navigate(Routes.player(it)) },
                 onOpenDetails = { navController.navigate(Routes.details(it)) },
             )
         }
         composable(Routes.NOTIFICATIONS) {
-            NotificationsScreen(onBack = { navController.popBackStack() })
+            NotificationsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenDetails = { navController.navigate(Routes.details(it)) },
+            )
         }
     }
 }

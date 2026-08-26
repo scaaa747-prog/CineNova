@@ -1,9 +1,10 @@
 package com.cinenova.app.ui.screens
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,12 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WifiOff
@@ -26,14 +23,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,9 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cinenova.app.data.AppStore
 import com.cinenova.app.data.MediaItem
 import com.cinenova.app.data.remote.ApiResult
@@ -53,41 +45,26 @@ import com.cinenova.app.di.ServiceLocator
 import com.cinenova.app.ui.components.ContentRow
 import com.cinenova.app.ui.components.FeaturedHero
 import com.cinenova.app.ui.components.LoadingSkeleton
-import com.cinenova.app.ui.components.MoviePosterCard
-import com.cinenova.app.ui.components.NoResultsState
 import com.cinenova.app.ui.theme.Spacing
-import com.cinenova.app.viewmodel.CatalogViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * 100% Live Streaming Home Screen with Material 3 Search Bar.
+ * 100% Live Streaming Home Screen with Dedicated Search Navigation and Cache Fallback.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    onOpenSearch: () -> Unit,
     onOpenDetails: (String) -> Unit,
     onPlay: (String) -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenContinueWatching: () -> Unit,
 ) {
-    var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
     var isOffline by remember { mutableStateOf(false) }
     var liveSections by remember { mutableStateOf<List<TabSectionDto>>(emptyList()) }
     var heroItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     val scope = rememberCoroutineScope()
-
-    // Live search integration
-    val searchVm: CatalogViewModel = viewModel()
-    val searchState by searchVm.search.collectAsState()
-
-    LaunchedEffect(searchQuery) {
-        delay(300)
-        if (searchQuery.isNotBlank()) {
-            searchVm.search(searchQuery)
-        }
-    }
 
     fun loadHomeFeed() {
         isLoading = true
@@ -116,7 +93,9 @@ fun HomeScreen(
                     isLoading = false
                 }
                 else -> {
-                    isOffline = true
+                    if (liveSections.isEmpty()) {
+                        isOffline = true
+                    }
                     isLoading = false
                 }
             }
@@ -133,96 +112,54 @@ fun HomeScreen(
                 Text("CineNova", style = MaterialTheme.typography.headlineSmall)
             },
             actions = {
+                IconButton(onClick = onOpenSearch) {
+                    Icon(Icons.Outlined.Search, contentDescription = "Search")
+                }
                 IconButton(onClick = onOpenNotifications) {
                     BadgedIcon(unread = AppStore.unreadCount())
                 }
             },
         )
 
-        // Material 3 Pill Search Bar
+        // Material 3 Pill Search Launcher
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                .padding(horizontal = Spacing.md, vertical = Spacing.xs)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onOpenSearch,
+                ),
             shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 2.dp,
         ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = {
-                    Text(
-                        "Search movies, shows, anime...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        Icons.Outlined.Search,
-                        contentDescription = "Search",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(
-                                Icons.Outlined.Close,
-                                contentDescription = "Clear search",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = MaterialTheme.shapes.extraLarge,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = "Search",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Search movies, series, anime...",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
-        when {
-            // ---- Active Search Mode ----
-            searchQuery.isNotBlank() -> {
-                when (val state = searchState) {
-                    is CatalogViewModel.SearchUiState.Loading -> {
-                        LoadingSkeleton(lines = 6, hero = false)
-                    }
-                    is CatalogViewModel.SearchUiState.Error -> {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(state.message, color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                    is CatalogViewModel.SearchUiState.Results -> {
-                        if (state.items.isEmpty()) {
-                            NoResultsState(searchQuery)
-                        } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 110.dp),
-                                contentPadding = PaddingValues(Spacing.md),
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                                modifier = Modifier.fillMaxSize(),
-                            ) {
-                                items(state.items, key = { it.id }) { item ->
-                                    MoviePosterCard(item = item, onClick = { onOpenDetails(item.id) })
-                                }
-                            }
-                        }
-                    }
-                    else -> Unit
-                }
-            }
+        Spacer(Modifier.height(Spacing.xs))
 
+        when {
             // ---- Loading Home State ----
-            isLoading -> {
+            isLoading && liveSections.isEmpty() -> {
                 LoadingSkeleton(lines = 8, hero = true)
             }
 
@@ -247,7 +184,7 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Please check your internet connection and try again.",
+                        "Please check your network connection and retry.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

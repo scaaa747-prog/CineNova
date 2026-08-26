@@ -1,8 +1,6 @@
 package com.cinenova.app.ui.screens
 
 import android.app.PictureInPictureParams
-import android.content.res.Configuration
-import android.media.AudioManager
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
@@ -57,13 +55,17 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.cinenova.app.data.DemoRepository
+import com.cinenova.app.data.remote.ApiResult
+import com.cinenova.app.di.ServiceLocator
 import kotlinx.coroutines.delay
 
-private const val DEMO_STREAM =
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+private const val ANDROID_USER_AGENT =
+    "com.community.oneroom/50020045 (Linux; U; Android 13; en_US; 22101316G; Build/TQ2A.230405.003; Cronet/135.0.7012.3)"
 
 private fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000
@@ -71,16 +73,15 @@ private fun formatTime(ms: Long): String {
 }
 
 /**
- * Premium streaming player. Controls auto-fade after 3s of inactivity.
- * Includes buffering + error states, ±10s, speed, PiP and fullscreen.
+ * Premium video player streaming live CDN sources with ExoPlayer.
  */
 @Composable
 fun PlayerScreen(itemId: String, onBack: () -> Unit) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
-    val item = remember(itemId) { DemoRepository.item(itemId) }
-    val isTv = item?.type == com.cinenova.app.data.MediaType.TV
-    val episodes = remember(item) { item?.let { DemoRepository.episodesOf(it) } }
+    val demoItem = remember(itemId) { DemoRepository.item(itemId) }
+    var videoTitle by remember(itemId) { mutableStateOf(demoItem?.title ?: "") }
+    var isTv by remember(itemId) { mutableStateOf(demoItem?.type == com.cinenova.app.data.MediaType.TV) }
 
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
     var hasError by remember { mutableStateOf(false) }
@@ -92,20 +93,38 @@ fun PlayerScreen(itemId: String, onBack: () -> Unit) {
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     val speeds = listOf(0.5f, 1f, 1.25f, 1.5f, 2f)
 
-    // Resolve a real playback source from the API layer for catalog IDs;
-    // falls back to the bundled demo stream for local/demo content.
-    var streamUrl by remember { mutableStateOf(DEMO_STREAM) }
+    var streamUrl by remember { mutableStateOf<String?>(null) }
+
+    // Resolve real live streaming resource from MovieBox API
     LaunchedEffect(itemId) {
-        val subjectId = itemId.toLongOrNull() ?: return@LaunchedEffect
-        when (
-            val result = com.cinenova.app.di.ServiceLocator.catalogRepository
-                .playbackResources(subjectId, season = 0, episode = 0)
-        ) {
-            is com.cinenova.app.data.remote.ApiResult.Success ->
-                result.value.bestSource()?.let { source ->
-                    if (source.url.isNotBlank()) streamUrl = source.url
+        val subjectId = itemId.toLongOrNull()
+        if (subjectId != null) {
+            // Load title
+            when (val detailRes = ServiceLocator.catalogRepository.subjectDetail(subjectId)) {
+                is ApiResult.Success -> {
+                    if (detailRes.value.title.isNotBlank()) {
+                        videoTitle = detailRes.value.title
+                    }
+                    isTv = detailRes.value.type == com.cinenova.app.data.MediaType.TV
                 }
-            else -> Unit
+                else -> Unit
+            }
+
+            // Load playback CDN resource
+            when (val result = ServiceLocator.catalogRepository.playbackResources(subjectId, season = 0, episode = 0)) {
+                is ApiResult.Success -> {
+                    val best = result.value.bestSource()
+                    if (best != null && best.url.isNotBlank()) {
+                        streamUrl = best.url
+                    }
+                }
+                else -> {
+                    hasError = true
+                }
+            }
+        } else {
+            // Fallback for demo IDs
+            streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
         }
     }
 
@@ -114,29 +133,44 @@ fun PlayerScreen(itemId: String, onBack: () -> Unit) {
     }
 
     DisposableEffect(streamUrl) {
-        val exo = ExoPlayer.Builder(context).build().apply {
-            setMediaItem(ExoMediaItem.fromUri(streamUrl))
-            playWhenReady = true
-            prepare()
-            addListener(object : Player.Listener {
-                override fun onIsPlayingChanged(playing: Boolean) {
-                    isPlaying = playing
-                }
+        val url = streamUrl ?: return@DisposableEffect onDispose {}
+        
+        // Build ExoPlayer with spoofed Android User-Agent and Range headers
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent(ANDROID_USER_AGENT)
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(30000)
 
-                override fun onPlaybackStateChanged(state: Int) {
-                    isBuffering = state == Player.STATE_BUFFERING
-                }
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(httpDataSourceFactory)
 
-                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                    hasError = true
-                }
-            })
-        }
+        val exo = ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+            .apply {
+                setMediaItem(ExoMediaItem.fromUri(url))
+                playWhenReady = true
+                prepare()
+                addListener(object : Player.Listener {
+                    override fun onIsPlayingChanged(playing: Boolean) {
+                        isPlaying = playing
+                    }
+
+                    override fun onPlaybackStateChanged(state: Int) {
+                        isBuffering = state == Player.STATE_BUFFERING
+                    }
+
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        hasError = true
+                    }
+                })
+            }
         player = exo
         onDispose { exo.release() }
     }
 
-    // Progress ticker + auto-hide controls
+    // Progress ticker
     LaunchedEffect(player) {
         while (true) {
             player?.let {
@@ -144,9 +178,6 @@ fun PlayerScreen(itemId: String, onBack: () -> Unit) {
                 durationMs = it.duration.coerceAtLeast(0)
             }
             delay(250)
-            if (isPlaying && !isBuffering && System.currentTimeMillis() % 100 < 5) {
-                controlsVisible = false
-            }
         }
     }
 
@@ -194,7 +225,7 @@ fun PlayerScreen(itemId: String, onBack: () -> Unit) {
                 }
             })
 
-            isBuffering -> CircularProgressIndicator(
+            isBuffering || streamUrl == null -> CircularProgressIndicator(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.Center),
             )
@@ -238,7 +269,7 @@ fun PlayerScreen(itemId: String, onBack: () -> Unit) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close player", tint = Color.White)
                 }
                 Text(
-                    item?.title ?: "",
+                    videoTitle,
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
                 )
@@ -271,7 +302,6 @@ fun PlayerScreen(itemId: String, onBack: () -> Unit) {
                                 Icon(Icons.Outlined.SkipPrevious, "Previous episode", tint = Color.White)
                             }
                         }
-                        // Speed cycler
                         IconButton(onClick = {
                             val next = speeds[(speeds.indexOf(playbackSpeed) + 1).mod(speeds.size)]
                             playbackSpeed = next
@@ -329,7 +359,7 @@ private fun PlayerError(onRetry: () -> Unit) {
         Text("Playback error", color = Color.White, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.padding(4.dp))
         Text(
-            "We couldn't play this title. Check your connection and try again.",
+            "We could not stream this title. Please check your connection and try again.",
             color = Color.White.copy(alpha = 0.7f),
             style = MaterialTheme.typography.bodyMedium,
         )

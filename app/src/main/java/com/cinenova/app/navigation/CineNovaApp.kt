@@ -1,11 +1,8 @@
 package com.cinenova.app.navigation
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DownloadDone
@@ -20,22 +17,19 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.cinenova.app.data.DemoRepository
+import com.cinenova.app.di.ServiceLocator
 import com.cinenova.app.ui.screens.ContinueWatchingScreen
 import com.cinenova.app.ui.screens.DetailsScreen
 import com.cinenova.app.ui.screens.DownloadsScreen
@@ -81,79 +75,47 @@ private val bottomDestinations = listOf(
 private val tabRoutes = bottomDestinations.map { it.route }.toSet()
 
 /**
- * Adaptive app shell: NavigationBar on compact widths, NavigationRail on
- * medium/expanded (tablet & desktop).
+ * Adaptive app shell with Material 3 NavigationBar and NavHost.
  */
 @Composable
 fun CineNovaApp() {
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        com.cinenova.app.di.ServiceLocator.catalogRepository.bootstrap()
+    LaunchedEffect(Unit) {
+        ServiceLocator.catalogRepository.bootstrap()
     }
 
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-
-    val adaptiveInfo = currentWindowAdaptiveInfo()
-    val isExpanded = adaptiveInfo.windowSizeClass.windowWidthSizeClass ==
-        androidx.window.core.layout.WindowWidthSizeClass.EXPANDED ||
-        adaptiveInfo.windowSizeClass.windowWidthSizeClass ==
-        androidx.window.core.layout.WindowWidthSizeClass.MEDIUM
-
     val showBars = currentRoute in tabRoutes
 
-    if (isExpanded && showBars) {
-        Row(Modifier.fillMaxSize()) {
-            NavigationRail(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .widthIn(min = 80.dp),
-            ) {
-                bottomDestinations.forEach { dest ->
-                    val selected = currentRoute == dest.route
-                    NavigationRailItem(
-                        selected = selected,
-                        onClick = { navigateToTab(navController, dest.route) },
-                        icon = {
-                            Icon(
-                                if (selected) dest.selectedIcon else dest.icon,
-                                contentDescription = dest.label,
-                            )
-                        },
-                        label = { Text(dest.label) },
-                    )
-                }
-            }
-            Box(Modifier.weight(1f)) {
-                AppNavHost(navController, currentRoute)
-            }
-        }
-    } else {
-        Scaffold(
-            bottomBar = {
-                if (showBars) {
-                    NavigationBar {
-                        bottomDestinations.forEach { dest ->
-                            val selected = currentRoute == dest.route
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = { navigateToTab(navController, dest.route) },
-                                icon = {
-                                    Icon(
-                                        if (selected) dest.selectedIcon else dest.icon,
-                                        contentDescription = dest.label,
-                                    )
-                                },
-                                label = { Text(dest.label) },
-                            )
-                        }
+    Scaffold(
+        bottomBar = {
+            if (showBars) {
+                NavigationBar {
+                    bottomDestinations.forEach { dest ->
+                        val selected = currentRoute == dest.route
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { navigateToTab(navController, dest.route) },
+                            icon = {
+                                Icon(
+                                    if (selected) dest.selectedIcon else dest.icon,
+                                    contentDescription = dest.label,
+                                )
+                            },
+                            label = { Text(dest.label) },
+                        )
                     }
                 }
-            },
-        ) { innerPadding ->
-            Box(Modifier.padding(innerPadding)) {
-                AppNavHost(navController, currentRoute)
             }
+        },
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            AppNavHost(navController)
         }
     }
 }
@@ -172,7 +134,6 @@ private fun navigateToTab(
 @Composable
 private fun AppNavHost(
     navController: androidx.navigation.NavHostController,
-    currentRoute: String?,
 ) {
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
@@ -215,6 +176,7 @@ private fun AppNavHost(
                 itemId = itemId,
                 onBack = { navController.popBackStack() },
                 onPlay = { navController.navigate(Routes.player(it)) },
+                onOpenDetails = { navController.navigate(Routes.details(it)) },
             )
         }
         composable(Routes.PLAYER) { entry ->
@@ -227,14 +189,13 @@ private fun AppNavHost(
         composable(Routes.CONTINUE_WATCHING) {
             ContinueWatchingScreen(
                 onBack = { navController.popBackStack() },
-                onPlay = { navController.navigate(Routes.player(it)) },
+                onResume = { navController.navigate(Routes.player(it)) },
                 onOpenDetails = { navController.navigate(Routes.details(it)) },
             )
         }
         composable(Routes.NOTIFICATIONS) {
             NotificationsScreen(
                 onBack = { navController.popBackStack() },
-                onOpenDetails = { navController.navigate(Routes.details(it)) },
             )
         }
     }

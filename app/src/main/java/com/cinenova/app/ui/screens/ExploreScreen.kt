@@ -27,9 +27,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -41,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cinenova.app.data.MediaItem
@@ -73,7 +76,7 @@ private val commonGenres = listOf(
 )
 
 /**
- * 100% Live Explore & Search Screen with Zero Dummy Data.
+ * 100% Live Explore & Search Screen with Material 3 Design.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,14 +101,6 @@ fun ExploreScreen(
     LaunchedEffect(query) {
         delay(300)
         if (query.isNotBlank()) searchVm.search(query)
-    }
-
-    fun loadLiveExplore() {
-        isLoadingCatalog = true
-        isCatalogOffline = false
-        kotlinx.coroutines.GlobalScope.let {
-            // using rememberCoroutineScope is better
-        }
     }
 
     LaunchedEffect(Unit) {
@@ -146,25 +141,54 @@ fun ExploreScreen(
             },
         )
 
-        // Search bar
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("Search movies, shows, anime...") },
-            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-            trailingIcon = {
-                if (query.isNotEmpty()) {
-                    IconButton(onClick = { query = "" }) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Clear search")
-                    }
-                }
-            },
-            singleLine = true,
-            shape = MaterialTheme.shapes.large,
+        // Material 3 Search Bar
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.md),
-        )
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 2.dp,
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = {
+                    Text(
+                        "Search movies, shows, anime...",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Outlined.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(
+                                Icons.Outlined.Close,
+                                contentDescription = "Clear search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         Spacer(Modifier.height(Spacing.sm))
 

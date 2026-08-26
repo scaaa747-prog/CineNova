@@ -12,56 +12,15 @@ data class MediaItem(
     val genres: List<String> = emptyList(),
     val description: String = "",
     val type: MediaType = MediaType.MOVIE,
-    val posterUrlOverride: String? = null,
-    val backdropUrlOverride: String? = null,
-) {
-    val posterUrl: String
-        get() = posterUrlOverride?.takeIf { it.isNotBlank() } ?: "https://picsum.photos/seed/$id-p/400/600"
-
-    val backdropUrl: String
-        get() = backdropUrlOverride?.takeIf { it.isNotBlank() } ?: "https://picsum.photos/seed/$id-b/960/540"
-
-    constructor(
-        id: String,
-        title: String,
-        year: Int = 0,
-        rating: Double = 0.0,
-        ageRating: String = "NR",
-        runtimeMinutes: Int = 0,
-        genres: List<String> = emptyList(),
-        description: String = "",
-        type: MediaType = MediaType.MOVIE,
-        posterUrl: String? = null,
-        backdropUrl: String? = null,
-    ) : this(
-        id = id,
-        title = title,
-        year = year,
-        rating = rating,
-        ageRating = ageRating,
-        runtimeMinutes = runtimeMinutes,
-        genres = genres,
-        description = description,
-        type = type,
-        posterUrlOverride = posterUrl,
-        backdropUrlOverride = backdropUrl,
-    )
-}
+    val posterUrl: String = "",
+    val backdropUrl: String = "",
+)
 
 data class CastMember(
     val name: String,
     val role: String,
-    val avatarUrlOverride: String? = null,
-) {
-    val avatarUrl: String
-        get() = avatarUrlOverride?.takeIf { it.isNotBlank() } ?: "https://picsum.photos/seed/$name-avatar/200/200"
-
-    constructor(name: String, role: String, avatarUrl: String? = null) : this(
-        name = name,
-        role = role,
-        avatarUrlOverride = avatarUrl,
-    )
-}
+    val avatarUrl: String = "",
+)
 
 data class Review(
     val author: String,
@@ -75,31 +34,10 @@ data class Episode(
     val seasonNumber: Int,
     val episodeNumber: Int,
     val title: String,
-    val runtimeMinutes: Int,
-    val description: String,
-    val thumbnailUrlOverride: String? = null,
-) {
-    val thumbnailUrl: String
-        get() = thumbnailUrlOverride?.takeIf { it.isNotBlank() } ?: "https://picsum.photos/seed/$id-ep/320/180"
-
-    constructor(
-        id: String,
-        seasonNumber: Int,
-        episodeNumber: Int,
-        title: String,
-        runtimeMinutes: Int = 0,
-        description: String = "",
-        thumbnailUrl: String? = null,
-    ) : this(
-        id = id,
-        seasonNumber = seasonNumber,
-        episodeNumber = episodeNumber,
-        title = title,
-        runtimeMinutes = runtimeMinutes,
-        description = description,
-        thumbnailUrlOverride = thumbnailUrl,
-    )
-}
+    val runtimeMinutes: Int = 0,
+    val description: String = "",
+    val thumbnailUrl: String = "",
+)
 
 data class Season(
     val number: Int,

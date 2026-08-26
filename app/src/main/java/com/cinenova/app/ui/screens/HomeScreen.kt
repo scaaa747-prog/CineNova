@@ -9,42 +9,56 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cinenova.app.data.AppStore
-import com.cinenova.app.data.DemoRepository
 import com.cinenova.app.data.MediaItem
-import com.cinenova.app.data.WatchProgress
 import com.cinenova.app.data.remote.ApiResult
 import com.cinenova.app.data.remote.dto.TabSectionDto
 import com.cinenova.app.data.remote.mapper.toMediaItem
 import com.cinenova.app.di.ServiceLocator
 import com.cinenova.app.ui.components.ContentRow
-import com.cinenova.app.ui.components.ContinueWatchingCard
 import com.cinenova.app.ui.components.FeaturedHero
-import com.cinenova.app.ui.components.OfflineBanner
+import com.cinenova.app.ui.components.LoadingSkeleton
+import com.cinenova.app.ui.components.MoviePosterCard
+import com.cinenova.app.ui.components.NoResultsState
 import com.cinenova.app.ui.theme.Spacing
+import com.cinenova.app.viewmodel.CatalogViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
- * Immersive streaming Home: hero carousel + dynamic live API content rails.
+ * 100% Live Streaming Home Screen with Search bar and zero dummy/demo fallback.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,51 +68,61 @@ fun HomeScreen(
     onOpenNotifications: () -> Unit,
     onOpenContinueWatching: () -> Unit,
 ) {
-    var offline by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(true) }
+    var isOffline by remember { mutableStateOf(false) }
     var liveSections by remember { mutableStateOf<List<TabSectionDto>>(emptyList()) }
     var heroItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    val scope = rememberCoroutineScope()
 
-    // Fallback demo rails
-    val trending = remember { DemoRepository.trending }
-    val popularMovies = remember { DemoRepository.popularMovies }
-    val popularTv = remember { DemoRepository.popularTv }
-    val newReleases = remember { DemoRepository.newReleases }
-    val topRated = remember { DemoRepository.topRated.take(10) }
-    val recommended = remember { DemoRepository.recommended }
-    val recentlyAdded = remember { DemoRepository.recentlyAdded }
-    val becauseYouWatched = remember { DemoRepository.becauseYouWatched.take(8) }
+    // Live search integration
+    val searchVm: CatalogViewModel = viewModel()
+    val searchState by searchVm.search.collectAsState()
 
-    LaunchedEffect(Unit) {
-        when (val result = ServiceLocator.catalogRepository.bootstrap()) {
-            is ApiResult.Success -> {
-                offline = false
-                val sections = result.value.items.orEmpty()
-                liveSections = sections
-
-                // Extract banner items for hero
-                val banners = sections.firstOrNull { it.type == "BANNER" }?.banner?.banners.orEmpty()
-                val bannerMedia = banners.mapNotNull { b ->
-                    b.subject?.toMediaItem() ?: b.subjectId?.let { id ->
-                        MediaItem(
-                            id = id,
-                            title = b.content.orEmpty(),
-                            posterUrl = b.image?.url.orEmpty(),
-                            backdropUrl = b.image?.url.orEmpty(),
-                        )
-                    }
-                }
-                if (bannerMedia.isNotEmpty()) {
-                    heroItems = bannerMedia
-                }
-            }
-            is ApiResult.NetworkError -> {
-                offline = true
-            }
-            else -> Unit
+    LaunchedEffect(searchQuery) {
+        delay(300)
+        if (searchQuery.isNotBlank()) {
+            searchVm.search(searchQuery)
         }
     }
 
-    val displayHero = if (heroItems.isNotEmpty()) heroItems else trending.take(5)
+    fun loadHomeFeed() {
+        isLoading = true
+        isOffline = false
+        scope.launch {
+            when (val result = ServiceLocator.catalogRepository.bootstrap()) {
+                is ApiResult.Success -> {
+                    isOffline = false
+                    val sections = result.value.items.orEmpty()
+                    liveSections = sections
+
+                    val banners = sections.firstOrNull { it.type == "BANNER" }?.banner?.banners.orEmpty()
+                    val bannerMedia = banners.mapNotNull { b ->
+                        b.subject?.toMediaItem() ?: b.subjectId?.let { id ->
+                            MediaItem(
+                                id = id,
+                                title = b.content.orEmpty(),
+                                posterUrl = b.image?.url.orEmpty(),
+                                backdropUrl = b.image?.url.orEmpty(),
+                            )
+                        }
+                    }
+                    if (bannerMedia.isNotEmpty()) {
+                        heroItems = bannerMedia
+                    }
+                    isLoading = false
+                }
+                else -> {
+                    isOffline = true
+                    isLoading = false
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadHomeFeed()
+    }
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -111,65 +135,131 @@ fun HomeScreen(
                 }
             },
         )
-        OfflineBanner(visible = offline)
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
-        ) {
-            item(key = "hero") {
-                FeaturedHero(
-                    items = displayHero,
-                    onPlay = { onPlay(it.id) },
-                    onOpenDetails = { onOpenDetails(it.id) },
-                )
+        // Top Search Bar on Home
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search movies & shows...") },
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                    }
+                }
+            },
+            singleLine = true,
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+        )
+
+        when {
+            // ---- Active Search Mode ----
+            searchQuery.isNotBlank() -> {
+                when (val state = searchState) {
+                    is CatalogViewModel.SearchUiState.Loading -> {
+                        LoadingSkeleton(lines = 6, hero = false)
+                    }
+                    is CatalogViewModel.SearchUiState.Error -> {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(state.message, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    is CatalogViewModel.SearchUiState.Results -> {
+                        if (state.items.isEmpty()) {
+                            NoResultsState(searchQuery)
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = 110.dp),
+                                contentPadding = PaddingValues(Spacing.md),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                items(state.items, key = { it.id }) { item ->
+                                    MoviePosterCard(item = item, onClick = { onOpenDetails(item.id) })
+                                }
+                            }
+                        }
+                    }
+                    else -> Unit
+                }
             }
 
-            item(key = "continue-watching") {
-                ContinueWatchingRow(
-                    onOpenDetails = onOpenDetails,
-                    onPlay = onPlay,
-                    onSeeAll = onOpenContinueWatching,
-                )
+            // ---- Loading Home State ----
+            isLoading -> {
+                LoadingSkeleton(lines = 8, hero = true)
             }
 
-            // Live API Sections if available
-            val movieSections = liveSections.filter {
-                it.type == "SUBJECTS_MOVIE" && !it.subjects.isNullOrEmpty()
-            }
-
-            if (movieSections.isNotEmpty()) {
-                items(movieSections, key = { it.title ?: it.position.toString() }) { sec ->
-                    val items = sec.subjects.orEmpty().map { it.toMediaItem() }
-                    val isLandscape = sec.position == 1 || sec.position == 3
-                    ContentRow(
-                        title = sec.title ?: "Trending",
-                        items = items,
-                        onOpenDetails = { onOpenDetails(it.id) },
-                        landscape = isLandscape,
+            // ---- Offline State (No dummy demo data) ----
+            isOffline && liveSections.isEmpty() -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(
+                        Icons.Outlined.WifiOff,
+                        contentDescription = "Offline",
+                        modifier = Modifier.padding(bottom = 16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-            } else {
-                // Fallback default rails
-                item(key = "trending") {
-                    ContentRow("Trending Now", trending, { onOpenDetails(it.id) }, landscape = true)
-                }
-                item(key = "popular-movies") { ContentRow("Popular Movies", popularMovies, onOpenDetails = { onOpenDetails(it.id) }) }
-                item(key = "popular-tv") { ContentRow("Popular TV Shows", popularTv, onOpenDetails = { onOpenDetails(it.id) }) }
-                item(key = "new-releases") {
-                    ContentRow("New Releases", newReleases, { onOpenDetails(it.id) }, landscape = true)
-                }
-                item(key = "top-rated") { ContentRow("Top Rated", topRated, onOpenDetails = { onOpenDetails(it.id) }) }
-                item(key = "recommended") { ContentRow("Recommended For You", recommended, onOpenDetails = { onOpenDetails(it.id) }) }
-                item(key = "recently-added") {
-                    ContentRow("Recently Added", recentlyAdded, { onOpenDetails(it.id) }, landscape = true)
-                }
-                item(key = "because-watched") {
-                    ContentRow("Because You Watched Midnight Horizon", becauseYouWatched, onOpenDetails = { onOpenDetails(it.id) })
+                    Text(
+                        "You are offline",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Please check your internet connection and try again.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { loadHomeFeed() }) {
+                        Text("Retry")
+                    }
                 }
             }
 
-            item(key = "spacer") { Spacer(Modifier.height(Spacing.lg)) }
+            // ---- Live Feeds State ----
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
+                ) {
+                    if (heroItems.isNotEmpty()) {
+                        item(key = "hero") {
+                            FeaturedHero(
+                                items = heroItems.take(5),
+                                onPlay = { onPlay(it.id) },
+                                onOpenDetails = { onOpenDetails(it.id) },
+                            )
+                        }
+                    }
+
+                    val movieSections = liveSections.filter {
+                        it.type == "SUBJECTS_MOVIE" && !it.subjects.isNullOrEmpty()
+                    }
+
+                    items(movieSections, key = { it.title ?: it.position.toString() }) { sec ->
+                        val items = sec.subjects.orEmpty().map { it.toMediaItem() }
+                        val isLandscape = sec.position == 1 || sec.position == 3
+                        ContentRow(
+                            title = sec.title ?: "Trending",
+                            items = items,
+                            onOpenDetails = { onOpenDetails(it.id) },
+                            landscape = isLandscape,
+                        )
+                    }
+
+                    item(key = "spacer") { Spacer(Modifier.height(Spacing.lg)) }
+                }
+            }
         }
     }
 }
@@ -178,44 +268,10 @@ fun HomeScreen(
 private fun BadgedIcon(unread: Int) {
     if (unread > 0) {
         Box(contentAlignment = Alignment.TopEnd) {
-            Icon(Icons.Outlined.Notifications, contentDescription = "Notifications ($unread unread)")
-            Badge { Text("$unread") }
+            Icon(Icons.Outlined.Notifications, contentDescription = "Notifications")
+            Badge { Text(unread.toString()) }
         }
     } else {
         Icon(Icons.Outlined.Notifications, contentDescription = "Notifications")
-    }
-}
-
-@Composable
-private fun ContinueWatchingRow(
-    onOpenDetails: (String) -> Unit,
-    onPlay: (String) -> Unit,
-    onSeeAll: () -> Unit,
-) {
-    val entries: List<Pair<WatchProgress, MediaItem>> = DemoRepository.continueWatching
-        .mapNotNull { p -> DemoRepository.item(p.itemId)?.let { p to it } }
-
-    Column {
-        com.cinenova.app.ui.components.SectionHeader(
-            title = "Continue Watching",
-            actionLabel = "See all",
-            onAction = onSeeAll,
-        )
-        androidx.compose.foundation.lazy.LazyRow(
-            contentPadding = PaddingValues(horizontal = Spacing.md),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-        ) {
-            items(count = entries.size, key = { entries[it].first.itemId }) { index ->
-                val (progress, item) = entries[index]
-                ContinueWatchingCard(
-                    item = item,
-                    progress = progress,
-                    onResume = { onPlay(item.id) },
-                    onRemove = {
-                        onOpenDetails(item.id)
-                    },
-                )
-            }
-        }
     }
 }

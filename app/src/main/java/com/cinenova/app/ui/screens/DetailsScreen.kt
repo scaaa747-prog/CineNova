@@ -293,13 +293,13 @@ fun DetailsScreen(
 
             // ---- TV Seasons / Episodes ----
             if (item.type == MediaType.TV && seasons.isNotEmpty()) {
-                item {
-                    val seasonNumbers = seasons.map { it.number }
-                    if (seasonNumbers.size > 1) {
+                if (seasons.size > 1) {
+                    item {
                         SeasonSelector(
-                            seasons = seasonNumbers,
-                            selected = selectedSeason,
+                            seasons = seasons,
+                            selectedSeason = selectedSeason,
                             onSelect = { selectedSeason = it },
+                            modifier = Modifier.padding(horizontal = Spacing.md),
                         )
                         Spacer(Modifier.height(Spacing.sm))
                     }
@@ -309,7 +309,8 @@ fun DetailsScreen(
                     val ep = currentSeason!!.episodes[index]
                     EpisodeCard(
                         episode = ep,
-                        onClick = { onPlay(item.id) },
+                        watched = false,
+                        onPlay = { onPlay(item.id) },
                         modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
                     )
                 }

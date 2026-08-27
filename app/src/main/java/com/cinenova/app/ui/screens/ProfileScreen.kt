@@ -108,6 +108,14 @@ fun ProfileScreen(onManageDownloads: () -> Unit) {
                 shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
             ) { Text("System") }
         }
+        Spacer(Modifier.height(Spacing.xs))
+        ToggleSetting(
+            title = "Glassmorphic Floating Nav Bar",
+            subtitle = "Frosted glass effect with rounded floating pill shape",
+            checked = AppStore.glassNavBar.value,
+            icon = Icons.Outlined.Contrast,
+            onCheckedChange = { AppStore.setGlassNavBar(it) },
+        )
         SettingsDivider()
 
         // ---- Playback ----

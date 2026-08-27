@@ -19,6 +19,7 @@ object AppStore {
 
     // ---- Appearance / Theme ----
     var themeMode by mutableStateOf(ThemeMode.DARK)
+    val glassNavBar = mutableStateOf(true)
 
     // ---- Playback & Streaming ----
     val streamingQuality = mutableStateOf("Auto (Best)")
@@ -56,6 +57,7 @@ object AppStore {
             "SYSTEM" -> ThemeMode.SYSTEM
             else -> ThemeMode.DARK
         }
+        glassNavBar.value = p.getBoolean("glass_nav_bar", true)
 
         streamingQuality.value = p.getString("streaming_quality", "Auto (Best)") ?: "Auto (Best)"
         playbackSpeed.value = p.getString("playback_speed", "Normal") ?: "Normal"
@@ -80,6 +82,7 @@ object AppStore {
     private fun persist() {
         prefs?.edit()?.apply {
             putString("theme_mode", themeMode.name)
+            putBoolean("glass_nav_bar", glassNavBar.value)
             putString("streaming_quality", streamingQuality.value)
             putString("playback_speed", playbackSpeed.value)
             putBoolean("autoplay_next", autoplayNextEpisode.value)
@@ -98,6 +101,11 @@ object AppStore {
 
     fun setTheme(mode: ThemeMode) {
         themeMode = mode
+        persist()
+    }
+
+    fun setGlassNavBar(enabled: Boolean) {
+        glassNavBar.value = enabled
         persist()
     }
 

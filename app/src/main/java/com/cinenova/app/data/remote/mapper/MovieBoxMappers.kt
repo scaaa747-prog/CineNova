@@ -75,20 +75,65 @@ fun CastMemberDto.toCastMember(): CastMember = CastMember(
     avatarUrl = resolvedAvatar() ?: "",
 )
 
-fun SeasonDto.toSeason(): Season = Season(
-    number = resolvedNumber(),
-    episodes = episodes.orEmpty().map { it.toEpisode(resolvedNumber()) },
-)
+fun SeasonDto.toSeason(): Season {
+    val sNum = resolvedNumber()
+    val epList = if (!episodes.isNullOrEmpty()) {
+        episodes.map { it.toEpisode(sNum) }
+    } else {
+        val total = maxEp ?: epCount ?: episodeCount ?: totalEpisode ?: 10
+        (1..total).map { epNum ->
+            Episode(
+                id = "$sNum-$epNum",
+                seasonNumber = sNum,
+                episodeNumber = epNum,
+                title = "Episode $epNum",
+                runtimeMinutes = 45,
+                description = "Season $sNum Episode $epNum",
+                thumbnailUrl = "",
+            )
+        }
+    }
+    return Season(number = sNum, episodes = epList)
+}
 
 fun EpisodeDto.toEpisode(seasonNumber: Int): Episode = Episode(
     id = "$seasonNumber-${resolvedNumber()}",
     seasonNumber = seasonNumber,
     episodeNumber = resolvedNumber(),
     title = title ?: "Episode ${resolvedNumber()}",
-    runtimeMinutes = resolvedRuntime(),
+    runtimeMinutes = resolvedRuntime().let { if (it <= 0) 45 else it },
     description = description.orEmpty(),
     thumbnailUrl = resolvedThumb() ?: "",
 )
+
+fun SubjectDetailDto.resolvedSeasonsList(): List<Season> {
+    val raw = seasons ?: seasonList
+    if (!raw.isNullOrEmpty()) {
+        return raw.map { it.toSeason() }
+    }
+    val isTv = (subjectType ?: resolvedCategory()) == CATEGORY_TV
+    if (isTv) {
+        val sCount = seasonCount ?: 1
+        val eCount = maxEp ?: epCount ?: episodeCount ?: 10
+        return (1..sCount).map { sNum ->
+            Season(
+                number = sNum,
+                episodes = (1..eCount).map { epNum ->
+                    Episode(
+                        id = "$sNum-$epNum",
+                        seasonNumber = sNum,
+                        episodeNumber = epNum,
+                        title = "Episode $epNum",
+                        runtimeMinutes = 45,
+                        description = "Season $sNum Episode $epNum",
+                        thumbnailUrl = "",
+                    )
+                }
+            )
+        }
+    }
+    return emptyList()
+}
 
 fun ResourceResponseDto.toPlaybackResources(
     subjectId: Long,

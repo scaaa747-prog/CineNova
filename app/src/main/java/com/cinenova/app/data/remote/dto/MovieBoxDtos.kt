@@ -213,6 +213,11 @@ data class SubjectDetailDto(
     @SerializedName("cast") val cast: List<CastMemberDto>? = null,
     @SerializedName("actors") val actors: List<CastMemberDto>? = null,
     @SerializedName("seasons") val seasons: List<SeasonDto>? = null,
+    @SerializedName("seasonList") val seasonList: List<SeasonDto>? = null,
+    @SerializedName("seasonCount") val seasonCount: Int? = null,
+    @SerializedName("maxEp") val maxEp: Int? = null,
+    @SerializedName("epCount") val epCount: Int? = null,
+    @SerializedName("episodeCount") val episodeCount: Int? = null,
     @SerializedName("dubs") val dubs: List<DubDto>? = null,
 ) {
     fun resolvedId(): String = subjectId ?: id.orEmpty()
@@ -275,6 +280,10 @@ data class CastMemberDto(
 data class SeasonDto(
     @SerializedName("season") val seasonNumber: Int? = null,
     @SerializedName("se") val se: Int? = null,
+    @SerializedName("maxEp") val maxEp: Int? = null,
+    @SerializedName("epCount") val epCount: Int? = null,
+    @SerializedName("episodeCount") val episodeCount: Int? = null,
+    @SerializedName("totalEpisode") val totalEpisode: Int? = null,
     @SerializedName("episodes") val episodes: List<EpisodeDto>? = null,
 ) {
     fun resolvedNumber(): Int = seasonNumber ?: se ?: 1

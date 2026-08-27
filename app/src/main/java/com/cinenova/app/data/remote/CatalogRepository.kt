@@ -100,7 +100,27 @@ class MovieBoxCatalogRepository(
 
     override suspend fun seasonsOf(subjectId: Long): ApiResult<List<Season>> =
         apiCall { api.getSubject(subjectId) }.map { response ->
-            (response?.resolvedDetail()?.seasons ?: response?.seasons).orEmpty().map { it.toSeason() }
+            val detail = response?.resolvedDetail()
+            val seasons = detail?.resolvedSeasonsList() ?: (response?.seasons).orEmpty().map { it.toSeason() }
+            if (seasons.isNotEmpty()) seasons
+            else {
+                listOf(
+                    Season(
+                        number = 1,
+                        episodes = (1..10).map { epNum ->
+                            com.cinenova.app.data.Episode(
+                                id = "1-$epNum",
+                                seasonNumber = 1,
+                                episodeNumber = epNum,
+                                title = "Episode $epNum",
+                                runtimeMinutes = 45,
+                                description = "Season 1 Episode $epNum",
+                                thumbnailUrl = "",
+                            )
+                        }
+                    )
+                )
+            }
         }
 
     override suspend fun castOf(subjectId: Long): ApiResult<List<CastMember>> =

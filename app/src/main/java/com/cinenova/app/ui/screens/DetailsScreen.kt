@@ -25,9 +25,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.WifiOff
@@ -71,16 +71,13 @@ import coil.compose.AsyncImage
 import com.cinenova.app.data.AppStore
 import com.cinenova.app.data.CastMember
 import com.cinenova.app.data.DemoRepository
-import com.cinenova.app.data.DownloadState
 import com.cinenova.app.data.Episode
 import com.cinenova.app.data.MediaItem
 import com.cinenova.app.data.MediaType
 import com.cinenova.app.data.Season
 import com.cinenova.app.data.remote.ApiResult
 import com.cinenova.app.data.remote.PlaybackResources
-import com.cinenova.app.data.remote.StreamResource
 import com.cinenova.app.di.ServiceLocator
-import com.cinenova.app.ui.components.EpisodeCard
 import com.cinenova.app.ui.components.GenreChip
 import com.cinenova.app.ui.components.LoadingSkeleton
 import com.cinenova.app.ui.components.RatingBadge
@@ -111,7 +108,7 @@ private fun startSystemDownload(
 }
 
 /**
- * Details screen with Dub switcher, Season/Episode management, and Download Modal.
+ * Details screen with Dub Selector, Season/Episode list, and advanced Episode/Quality Download Modal.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,6 +133,8 @@ fun DetailsScreen(
     var selectedQuality by remember { mutableStateOf("1080P Full HD") }
     var showDownloadStartedPopup by remember { mutableStateOf(false) }
 
+    val selectedEpisodesToDownload = remember { mutableStateListOf<String>() }
+
     fun loadDetails(targetId: String) {
         val subjectId = targetId.toLongOrNull()
         if (subjectId != null) {
@@ -146,21 +145,21 @@ fun DetailsScreen(
                         if (result.value.title.isNotBlank()) {
                             liveItem = result.value
                         }
-                        val seasonsRes = ServiceLocator.catalogRepository.seasonsOf(subjectId)
-                        val castRes = ServiceLocator.catalogRepository.castOf(subjectId)
-                        val resRes = ServiceLocator.catalogRepository.playbackResources(subjectId, 0, 0)
-                        liveSeasons = seasonsRes.getOrNull().orEmpty()
-                        liveCast = castRes.getOrNull().orEmpty()
-                        playbackResources = resRes.getOrNull()
-                        playbackResources?.bestSource()?.let {
-                            selectedQuality = it.qualityLabel
-                        }
-                        isLoading = false
                     }
-                    else -> {
-                        isLoading = false
-                    }
+                    else -> Unit
                 }
+
+                val seasonsRes = ServiceLocator.catalogRepository.seasonsOf(subjectId)
+                val castRes = ServiceLocator.catalogRepository.castOf(subjectId)
+                val resRes = ServiceLocator.catalogRepository.playbackResources(subjectId, 0, 0)
+
+                liveSeasons = seasonsRes.getOrNull().orEmpty()
+                liveCast = castRes.getOrNull().orEmpty()
+                playbackResources = resRes.getOrNull()
+                playbackResources?.bestSource()?.let {
+                    selectedQuality = it.qualityLabel
+                }
+                isLoading = false
             }
         } else {
             isLoading = false
@@ -226,17 +225,16 @@ fun DetailsScreen(
 
     val item = liveItem!!
     var inWatchlist by remember(currentItemId) { mutableStateOf(AppStore.isInWatchlist(item.id)) }
-    var downloadState by remember(currentItemId) {
-        mutableStateOf(AppStore.downloadEntry(item.id)?.state)
-    }
     var selectedSeason by remember { mutableIntStateOf(1) }
     val seasons = if (liveSeasons.isNotEmpty()) liveSeasons else DemoRepository.episodesOf(item)
     val castMembers = if (liveCast.isNotEmpty()) liveCast else DemoRepository.castFor[item.id].orEmpty()
-
-    val selectedEpisodesToDownload = remember { mutableStateListOf<String>() }
+    val isSeries = item.type == MediaType.TV || seasons.isNotEmpty()
 
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 80.dp),
+        ) {
             item {
                 // ---- Hero backdrop ----
                 Box(
@@ -260,7 +258,7 @@ fun DetailsScreen(
                                 Brush.verticalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                                         MaterialTheme.colorScheme.surface,
                                     ),
                                 ),
@@ -284,10 +282,10 @@ fun DetailsScreen(
                         }
                         Surface(
                             shape = MaterialTheme.shapes.extraSmall,
-                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         ) {
                             Text(
-                                item.ageRating,
+                                if (isSeries) "TV Series" else item.ageRating,
                                 Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall,
                             )
@@ -342,7 +340,7 @@ fun DetailsScreen(
                     if (item.description.isNotBlank()) {
                         Text(
                             item.description,
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(Spacing.md))
@@ -390,10 +388,16 @@ fun DetailsScreen(
                 }
             }
 
-            // ---- TV Seasons / Episodes ----
-            if (item.type == MediaType.TV && seasons.isNotEmpty()) {
-                if (seasons.size > 1) {
-                    item {
+            // ---- TV Seasons & Episodes Grid ----
+            if (isSeries && seasons.isNotEmpty()) {
+                item {
+                    Text(
+                        "Seasons & Episodes",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = Spacing.md),
+                    )
+                    Spacer(Modifier.height(Spacing.xs))
+                    if (seasons.size > 1) {
                         SeasonSelector(
                             seasons = seasons,
                             selectedSeason = selectedSeason,
@@ -403,15 +407,42 @@ fun DetailsScreen(
                         Spacer(Modifier.height(Spacing.sm))
                     }
                 }
+
                 val currentSeason = seasons.firstOrNull { it.number == selectedSeason } ?: seasons.firstOrNull()
-                items(currentSeason?.episodes?.size ?: 0) { index ->
-                    val ep = currentSeason!!.episodes[index]
-                    EpisodeCard(
-                        episode = ep,
-                        watched = false,
-                        onPlay = { onPlay(item.id) },
-                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
-                    )
+                val epList = currentSeason?.episodes.orEmpty()
+                items(epList) { ep ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Spacing.md, vertical = 4.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Episode ${ep.episodeNumber}: ${ep.title}", style = MaterialTheme.typography.titleSmall)
+                                Text("${ep.runtimeMinutes} min", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                IconButton(onClick = { onPlay(item.id) }) {
+                                    Icon(Icons.Outlined.PlayArrow, contentDescription = "Play Episode", tint = MaterialTheme.colorScheme.primary)
+                                }
+                                IconButton(onClick = {
+                                    selectedEpisodesToDownload.clear()
+                                    selectedEpisodesToDownload.add(ep.id)
+                                    showDownloadSheet = true
+                                }) {
+                                    Icon(Icons.Outlined.Download, contentDescription = "Download Episode", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -450,7 +481,7 @@ fun DetailsScreen(
                                         modifier = Modifier
                                             .size(64.dp)
                                             .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                                     )
                                 }
                                 Spacer(Modifier.height(Spacing.xs))
@@ -470,7 +501,6 @@ fun DetailsScreen(
                             }
                         }
                     }
-                    Spacer(Modifier.height(Spacing.xl))
                 }
             }
         }
@@ -575,7 +605,7 @@ fun DetailsScreen(
                             }
                         }
                     } else {
-                        listOf("1080P Full HD (~1.5 GB)", "720P HD (~800 MB)", "480P Data Saver (~400 MB)").forEach { q ->
+                        listOf("1080P Full HD (~1.2 GB)", "720P HD (~700 MB)", "480P Data Saver (~350 MB)").forEach { q ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -593,7 +623,7 @@ fun DetailsScreen(
                     }
 
                     // Series Episode Selection
-                    if (item.type == MediaType.TV && seasons.isNotEmpty()) {
+                    if (isSeries && seasons.isNotEmpty()) {
                         Spacer(Modifier.height(16.dp))
                         Text("Select Episodes to Download:", style = MaterialTheme.typography.titleSmall)
                         val allEp = seasons.flatMap { it.episodes }
@@ -622,23 +652,24 @@ fun DetailsScreen(
 
                         LazyColumn(modifier = Modifier.height(140.dp)) {
                             items(allEp) { ep ->
+                                val isSelected = ep.id in selectedEpisodesToDownload
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            if (ep.id in selectedEpisodesToDownload) selectedEpisodesToDownload.remove(ep.id)
+                                            if (isSelected) selectedEpisodesToDownload.remove(ep.id)
                                             else selectedEpisodesToDownload.add(ep.id)
                                         },
                                 ) {
                                     Checkbox(
-                                        checked = ep.id in selectedEpisodesToDownload,
+                                        checked = isSelected,
                                         onCheckedChange = { chk ->
                                             if (chk) selectedEpisodesToDownload.add(ep.id)
                                             else selectedEpisodesToDownload.remove(ep.id)
                                         },
                                     )
-                                    Text("E${ep.episodeNumber}: ${ep.title}", style = MaterialTheme.typography.bodySmall)
+                                    Text("S${ep.seasonNumber}:E${ep.episodeNumber} · ${ep.title}", style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
@@ -654,13 +685,23 @@ fun DetailsScreen(
                             val downloadUrl = chosenSource?.url ?: "https://bcdn.hakunaymatata.com/sample.mp4"
                             val sizeMb = chosenSource?.sizeBytes?.let { it / (1024 * 1024) } ?: 480L
 
-                            // Enqueue real Android system download
-                            startSystemDownload(
-                                context = context,
-                                url = downloadUrl,
-                                title = item.title,
-                                filename = "${item.title.replace(" ", "_")}_${selectedQuality.take(5)}",
-                            )
+                            if (isSeries && selectedEpisodesToDownload.isNotEmpty()) {
+                                selectedEpisodesToDownload.forEach { epId ->
+                                    startSystemDownload(
+                                        context = context,
+                                        url = downloadUrl,
+                                        title = "${item.title} ($epId)",
+                                        filename = "${item.title.replace(" ", "_")}_$epId",
+                                    )
+                                }
+                            } else {
+                                startSystemDownload(
+                                    context = context,
+                                    url = downloadUrl,
+                                    title = item.title,
+                                    filename = "${item.title.replace(" ", "_")}_${selectedQuality.take(5)}",
+                                )
+                            }
 
                             // Register in AppStore downloads
                             AppStore.toggleDownload(
@@ -675,7 +716,10 @@ fun DetailsScreen(
                         shape = MaterialTheme.shapes.large,
                     ) {
                         Icon(Icons.Outlined.Download, contentDescription = null)
-                        Text("Start Download", Modifier.padding(start = 8.dp))
+                        val btnLabel = if (isSeries && selectedEpisodesToDownload.isNotEmpty()) {
+                            "Download ${selectedEpisodesToDownload.size} Episodes"
+                        } else "Start Download"
+                        Text(btnLabel, Modifier.padding(start = 8.dp))
                     }
 
                     Spacer(Modifier.height(16.dp))

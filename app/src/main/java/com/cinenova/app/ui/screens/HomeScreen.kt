@@ -224,6 +224,7 @@ fun HomeScreen(
         } else {
             LazyColumn(
                 Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 100.dp),
                 verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 // ---- Hero Featured Billboard ----

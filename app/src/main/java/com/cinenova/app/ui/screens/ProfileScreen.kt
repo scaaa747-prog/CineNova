@@ -207,7 +207,7 @@ fun ProfileScreen(onManageDownloads: () -> Unit) {
             onClick = { showPrivacyDialog = true },
         )
 
-        Spacer(Modifier.height(Spacing.xl))
+        Spacer(Modifier.height(100.dp))
     }
 
     // ---- Dialogs ----

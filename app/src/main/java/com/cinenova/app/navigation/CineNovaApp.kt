@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +24,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
@@ -45,7 +48,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,7 +60,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -71,14 +76,11 @@ import com.cinenova.app.ui.screens.PlayerScreen
 import com.cinenova.app.ui.screens.ProfileScreen
 import com.cinenova.app.ui.screens.SearchScreen
 import com.cinenova.app.ui.screens.WatchlistScreen
+import kotlinx.coroutines.launch
 
 object Routes {
-    const val HOME = "home"
-    const val EXPLORE = "explore"
+    const val MAIN_PAGER = "main_pager"
     const val SEARCH = "search"
-    const val DOWNLOADS = "downloads"
-    const val WATCHLIST = "watchlist"
-    const val PROFILE = "profile"
     const val NOTIFICATIONS = "notifications"
     const val CONTINUE_WATCHING = "continue_watching"
     const val DETAILS = "details/{itemId}"
@@ -89,25 +91,24 @@ object Routes {
 }
 
 private data class BottomDestination(
-    val route: String,
+    val pageIndex: Int,
     val label: String,
     val icon: ImageVector,
     val selectedIcon: ImageVector,
 )
 
 private val bottomDestinations = listOf(
-    BottomDestination(Routes.HOME, "Home", Icons.Outlined.Home, Icons.Filled.Home),
-    BottomDestination(Routes.EXPLORE, "Explore", Icons.Outlined.Explore, Icons.Filled.Explore),
-    BottomDestination(Routes.DOWNLOADS, "Downloads", Icons.Outlined.Download, Icons.Filled.DownloadDone),
-    BottomDestination(Routes.WATCHLIST, "Watchlist", Icons.Outlined.BookmarkBorder, Icons.Filled.Bookmark),
-    BottomDestination(Routes.PROFILE, "Profile", Icons.Outlined.Person, Icons.Filled.Person),
+    BottomDestination(0, "Home", Icons.Outlined.Home, Icons.Filled.Home),
+    BottomDestination(1, "Explore", Icons.Outlined.Explore, Icons.Filled.Explore),
+    BottomDestination(2, "Downloads", Icons.Outlined.Download, Icons.Filled.DownloadDone),
+    BottomDestination(3, "Watchlist", Icons.Outlined.BookmarkBorder, Icons.Filled.Bookmark),
+    BottomDestination(4, "Profile", Icons.Outlined.Person, Icons.Filled.Person),
 )
 
-private val tabRoutes = bottomDestinations.map { it.route }.toSet()
-
 /**
- * Adaptive app shell supporting Floating Glassmorphic Navigation Bar & standard docked M3 NavigationBar.
+ * Modern CineNova app with swipeable horizontal slider pager and elevated glassmorphic pill nav bar.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CineNovaApp() {
     LaunchedEffect(Unit) {
@@ -117,56 +118,159 @@ fun CineNovaApp() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val showBars = currentRoute in tabRoutes
+
+    NavHost(navController = navController, startDestination = Routes.MAIN_PAGER) {
+        composable(Routes.MAIN_PAGER) {
+            MainPagerScreen(
+                onOpenSearch = { navController.navigate(Routes.SEARCH) },
+                onOpenDetails = { navController.navigate(Routes.details(it)) },
+                onPlay = { navController.navigate(Routes.player(it)) },
+                onOpenNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
+                onOpenContinueWatching = { navController.navigate(Routes.CONTINUE_WATCHING) },
+            )
+        }
+        composable(Routes.SEARCH) {
+            SearchScreen(
+                onBack = { navController.popBackStack() },
+                onOpenDetails = { navController.navigate(Routes.details(it)) },
+            )
+        }
+        composable(Routes.DETAILS) { entry ->
+            val itemId = entry.arguments?.getString("itemId") ?: return@composable
+            DetailsScreen(
+                itemId = itemId,
+                onBack = { navController.popBackStack() },
+                onPlay = { navController.navigate(Routes.player(it)) },
+                onOpenDetails = { navController.navigate(Routes.details(it)) },
+                onNavigateDownloads = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.PLAYER) { entry ->
+            val itemId = entry.arguments?.getString("itemId") ?: return@composable
+            PlayerScreen(
+                itemId = itemId,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.NOTIFICATIONS) {
+            NotificationsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.CONTINUE_WATCHING) {
+            ContinueWatchingScreen(
+                onBack = { navController.popBackStack() },
+                onResume = { navController.navigate(Routes.player(it)) },
+                onOpenDetails = { navController.navigate(Routes.details(it)) },
+            )
+        }
+    }
+}
+
+/**
+ * Swipeable horizontal slider pager for seamless navigation between Home, Explore, Downloads, Watchlist, and Profile.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MainPagerScreen(
+    onOpenSearch: () -> Unit,
+    onOpenDetails: (String) -> Unit,
+    onPlay: (String) -> Unit,
+    onOpenNotifications: () -> Unit,
+    onOpenContinueWatching: () -> Unit,
+) {
+    val pagerState = rememberPagerState(pageCount = { bottomDestinations.size })
+    val scope = rememberCoroutineScope()
     val useGlassNav = AppStore.glassNavBar.value
+
+    fun scrollToPage(page: Int) {
+        scope.launch {
+            pagerState.animateScrollToPage(page)
+        }
+    }
 
     if (useGlassNav) {
         Box(Modifier.fillMaxSize()) {
-            AppNavHost(navController)
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                when (page) {
+                    0 -> HomeScreen(
+                        onOpenSearch = onOpenSearch,
+                        onOpenDetails = onOpenDetails,
+                        onPlay = onPlay,
+                        onOpenNotifications = onOpenNotifications,
+                        onOpenContinueWatching = onOpenContinueWatching,
+                    )
+                    1 -> ExploreScreen(onOpenDetails = onOpenDetails)
+                    2 -> DownloadsScreen(
+                        onBack = { scrollToPage(0) },
+                        onOpenDetails = onOpenDetails,
+                        onExplore = { scrollToPage(1) },
+                    )
+                    3 -> WatchlistScreen(
+                        onOpenDetails = onOpenDetails,
+                        onExplore = { scrollToPage(1) },
+                    )
+                    4 -> ProfileScreen(onManageDownloads = { scrollToPage(2) })
+                }
+            }
 
-            AnimatedVisibility(
-                visible = showBars,
-                enter = slideInVertically { it } + fadeIn(),
-                exit = slideOutVertically { it } + fadeOut(),
+            // Floating elevated glassmorphic pill bar positioned higher up
+            FloatingGlassNavBar(
+                selectedPageIndex = pagerState.currentPage,
+                onSelectPage = { page -> scrollToPage(page) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 20.dp, vertical = 18.dp),
-            ) {
-                FloatingGlassNavBar(
-                    currentRoute = currentRoute,
-                    onNavigate = { route -> navigateToTab(navController, route) },
-                )
-            }
+                    .padding(horizontal = 20.dp, vertical = 28.dp),
+            )
         }
     } else {
         Scaffold(
             bottomBar = {
-                if (showBars) {
-                    NavigationBar {
-                        bottomDestinations.forEach { dest ->
-                            val selected = currentRoute == dest.route
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = { navigateToTab(navController, dest.route) },
-                                icon = {
-                                    Icon(
-                                        if (selected) dest.selectedIcon else dest.icon,
-                                        contentDescription = dest.label,
-                                    )
-                                },
-                                label = { Text(dest.label) },
-                            )
-                        }
+                NavigationBar {
+                    bottomDestinations.forEach { dest ->
+                        val selected = pagerState.currentPage == dest.pageIndex
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { scrollToPage(dest.pageIndex) },
+                            icon = {
+                                Icon(
+                                    if (selected) dest.selectedIcon else dest.icon,
+                                    contentDescription = dest.label,
+                                )
+                            },
+                            label = { Text(dest.label) },
+                        )
                     }
                 }
             },
         ) { innerPadding ->
-            Box(
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-            ) {
-                AppNavHost(navController)
+            ) { page ->
+                when (page) {
+                    0 -> HomeScreen(
+                        onOpenSearch = onOpenSearch,
+                        onOpenDetails = onOpenDetails,
+                        onPlay = onPlay,
+                        onOpenNotifications = onOpenNotifications,
+                        onOpenContinueWatching = onOpenContinueWatching,
+                    )
+                    1 -> ExploreScreen(onOpenDetails = onOpenDetails)
+                    2 -> DownloadsScreen(
+                        onBack = { scrollToPage(0) },
+                        onOpenDetails = onOpenDetails,
+                        onExplore = { scrollToPage(1) },
+                    )
+                    3 -> WatchlistScreen(
+                        onOpenDetails = onOpenDetails,
+                        onExplore = { scrollToPage(1) },
+                    )
+                    4 -> ProfileScreen(onManageDownloads = { scrollToPage(2) })
+                }
             }
         }
     }
@@ -174,38 +278,43 @@ fun CineNovaApp() {
 
 @Composable
 private fun FloatingGlassNavBar(
-    currentRoute: String?,
-    onNavigate: (String) -> Unit,
+    selectedPageIndex: Int,
+    onSelectPage: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .shadow(elevation = 20.dp, shape = CircleShape, spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+            .shadow(
+                elevation = 20.dp,
+                shape = CircleShape,
+                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+            )
             .clip(CircleShape)
             .border(
                 border = BorderStroke(
-                    width = 1.dp,
+                    width = 1.2.dp,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.25f),
-                            Color.White.copy(alpha = 0.06f),
+                            Color.White.copy(alpha = 0.35f),
+                            Color.White.copy(alpha = 0.08f),
                         ),
                     ),
                 ),
                 shape = CircleShape,
             ),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
-        tonalElevation = 6.dp,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+        tonalElevation = 8.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             bottomDestinations.forEach { dest ->
-                val selected = currentRoute == dest.route
+                val selected = selectedPageIndex == dest.pageIndex
                 val iconColor by animateColorAsState(
                     targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
@@ -218,9 +327,9 @@ private fun FloatingGlassNavBar(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = { onNavigate(dest.route) },
+                            onClick = { onSelectPage(dest.pageIndex) },
                         )
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -229,7 +338,7 @@ private fun FloatingGlassNavBar(
                             .size(36.dp)
                             .clip(CircleShape)
                             .background(
-                                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
                                 else Color.Transparent,
                             ),
                         contentAlignment = Alignment.Center,
@@ -249,86 +358,6 @@ private fun FloatingGlassNavBar(
                     )
                 }
             }
-        }
-    }
-}
-
-private fun navigateToTab(
-    navController: androidx.navigation.NavHostController,
-    route: String,
-) {
-    navController.navigate(route) {
-        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
-    }
-}
-
-@Composable
-private fun AppNavHost(
-    navController: androidx.navigation.NavHostController,
-) {
-    NavHost(navController = navController, startDestination = Routes.HOME) {
-        composable(Routes.HOME) {
-            HomeScreen(
-                onOpenSearch = { navController.navigate(Routes.SEARCH) },
-                onOpenDetails = { navController.navigate(Routes.details(it)) },
-                onPlay = { navController.navigate(Routes.player(it)) },
-                onOpenNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
-                onOpenContinueWatching = { navController.navigate(Routes.CONTINUE_WATCHING) },
-            )
-        }
-        composable(Routes.EXPLORE) {
-            ExploreScreen(onOpenDetails = { navController.navigate(Routes.details(it)) })
-        }
-        composable(Routes.SEARCH) {
-            SearchScreen(
-                onBack = { navController.popBackStack() },
-                onOpenDetails = { navController.navigate(Routes.details(it)) },
-            )
-        }
-        composable(Routes.DOWNLOADS) {
-            DownloadsScreen(
-                onBack = { navController.popBackStack() },
-                onOpenDetails = { navController.navigate(Routes.details(it)) },
-                onExplore = { navigateToTab(navController, Routes.EXPLORE) },
-            )
-        }
-        composable(Routes.WATCHLIST) {
-            WatchlistScreen(
-                onOpenDetails = { navController.navigate(Routes.details(it)) },
-                onExplore = { navigateToTab(navController, Routes.EXPLORE) },
-            )
-        }
-        composable(Routes.PROFILE) {
-            ProfileScreen(onManageDownloads = { navigateToTab(navController, Routes.DOWNLOADS) })
-        }
-        composable(Routes.DETAILS) { entry ->
-            val itemId = entry.arguments?.getString("itemId") ?: return@composable
-            DetailsScreen(
-                itemId = itemId,
-                onBack = { navController.popBackStack() },
-                onPlay = { navController.navigate(Routes.player(it)) },
-                onOpenDetails = { navController.navigate(Routes.details(it)) },
-                onNavigateDownloads = { navigateToTab(navController, Routes.DOWNLOADS) },
-            )
-        }
-        composable(Routes.PLAYER) { entry ->
-            val itemId = entry.arguments?.getString("itemId") ?: return@composable
-            PlayerScreen(
-                itemId = itemId,
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable(Routes.NOTIFICATIONS) {
-            NotificationsScreen(onBack = { navController.popBackStack() })
-        }
-        composable(Routes.CONTINUE_WATCHING) {
-            ContinueWatchingScreen(
-                onBack = { navController.popBackStack() },
-                onResume = { navController.navigate(Routes.player(it)) },
-                onOpenDetails = { navController.navigate(Routes.details(it)) },
-            )
         }
     }
 }

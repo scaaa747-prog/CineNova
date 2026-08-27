@@ -9,6 +9,7 @@ import com.cinenova.app.data.remote.mapper.toCastMember
 import com.cinenova.app.data.remote.mapper.toMediaItem
 import com.cinenova.app.data.remote.mapper.toPlaybackResources
 import com.cinenova.app.data.remote.mapper.toSeason
+import com.cinenova.app.data.remote.mapper.resolvedSeasonsList
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

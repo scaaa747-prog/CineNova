@@ -64,9 +64,11 @@ enum class DownloadState { QUEUED, DOWNLOADING, PAUSED, COMPLETED }
 data class DownloadEntry(
     val itemId: String,
     val state: DownloadState,
-    val progressPercent: Int,
-    val sizeMb: Long,
+    val progressPercent: Int = 0,
+    val sizeMb: Long = 0L,
     val episodeLabel: String? = null,
+    val title: String? = null,
+    val posterUrl: String? = null,
 )
 
 enum class NotificationKind { NEW_RELEASE, NEW_EPISODE, RECOMMENDATION, DOWNLOAD_COMPLETE, APP }

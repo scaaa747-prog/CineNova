@@ -22,12 +22,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,13 +48,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.cinenova.app.data.AppStore
 import com.cinenova.app.data.CastMember
 import com.cinenova.app.data.DemoRepository
+import com.cinenova.app.data.DownloadState
 import com.cinenova.app.data.MediaItem
 import com.cinenova.app.data.MediaType
 import com.cinenova.app.data.Season
@@ -72,7 +70,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Cinematic details screen for movies and TV shows.
- * Supports live API subjects with graceful offline/error states.
+ * Supports live API subjects with graceful offline/error states and download action.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -284,6 +282,20 @@ fun DetailsScreen(
                             shape = MaterialTheme.shapes.large,
                         ) {
                             Text(if (inWatchlist) "✓ In Watchlist" else "+ Watchlist")
+                        }
+                        IconButton(onClick = {
+                            AppStore.toggleDownload(
+                                id = item.id,
+                                title = item.title,
+                                posterUrl = item.posterUrl,
+                            )
+                            downloadState = AppStore.downloadEntry(item.id)?.state
+                        }) {
+                            Icon(
+                                if (downloadState == DownloadState.COMPLETED) Icons.Outlined.DownloadDone else Icons.Outlined.Download,
+                                contentDescription = "Download ${item.title}",
+                                tint = if (downloadState != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
 

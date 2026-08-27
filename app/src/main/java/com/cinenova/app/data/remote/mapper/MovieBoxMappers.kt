@@ -24,12 +24,12 @@ fun SubjectSummaryDto.toMediaItem(): MediaItem = MediaItem(
     year = resolvedYear(),
     rating = resolvedRating(),
     ageRating = "NR",
-    runtimeMinutes = (seconds ?: 0) / 60,
+    runtimeMinutes = (seconds ?: durationSeconds ?: 0) / 60,
     genres = resolvedGenres(),
     description = description.orEmpty(),
     posterUrl = resolvedPoster() ?: "",
     backdropUrl = resolvedBackdrop() ?: resolvedPoster() ?: "",
-    type = (subjectType ?: category).toMediaTypeOrDefault(),
+    type = (subjectType ?: resolvedCategory()).toMediaTypeOrDefault(),
 )
 
 fun SubjectDetailDto.toMediaItem(): MediaItem = MediaItem(
@@ -37,13 +37,13 @@ fun SubjectDetailDto.toMediaItem(): MediaItem = MediaItem(
     title = resolvedTitle(),
     year = resolvedYear(),
     rating = resolvedRating(),
-    ageRating = ageRating ?: mpa ?: "NR",
+    ageRating = resolvedAgeRating(),
     runtimeMinutes = resolvedRuntime(),
     genres = resolvedGenres(),
     description = resolvedDescription(),
     posterUrl = resolvedPoster() ?: "",
     backdropUrl = resolvedBackdrop() ?: resolvedPoster() ?: "",
-    type = (subjectType ?: category).toMediaTypeOrDefault(),
+    type = (subjectType ?: resolvedCategory()).toMediaTypeOrDefault(),
 )
 
 fun SubjectDetailResponseDto.toMediaItem(subjectId: Long): MediaItem {

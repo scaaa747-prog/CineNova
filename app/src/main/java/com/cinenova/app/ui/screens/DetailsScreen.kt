@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -41,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,10 +68,11 @@ import com.cinenova.app.ui.components.LoadingSkeleton
 import com.cinenova.app.ui.components.RatingBadge
 import com.cinenova.app.ui.components.SeasonSelector
 import com.cinenova.app.ui.theme.Spacing
+import kotlinx.coroutines.launch
 
 /**
  * Cinematic details screen for movies and TV shows.
- * Supports both local demo catalog and live API subjects.
+ * Supports live API subjects with graceful offline/error states.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,26 +86,36 @@ fun DetailsScreen(
     var liveSeasons by remember(itemId) { mutableStateOf<List<Season>>(emptyList()) }
     var liveCast by remember(itemId) { mutableStateOf<List<CastMember>>(emptyList()) }
     var isLoading by remember(itemId) { mutableStateOf(liveItem == null) }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(itemId) {
+    fun loadDetails() {
         val subjectId = itemId.toLongOrNull()
         if (subjectId != null) {
-            when (val result = ServiceLocator.catalogRepository.subjectDetail(subjectId)) {
-                is ApiResult.Success -> {
-                    liveItem = result.value
-                    val seasonsRes = ServiceLocator.catalogRepository.seasonsOf(subjectId)
-                    val castRes = ServiceLocator.catalogRepository.castOf(subjectId)
-                    liveSeasons = seasonsRes.getOrNull().orEmpty()
-                    liveCast = castRes.getOrNull().orEmpty()
-                    isLoading = false
-                }
-                else -> {
-                    isLoading = false
+            isLoading = true
+            scope.launch {
+                when (val result = ServiceLocator.catalogRepository.subjectDetail(subjectId)) {
+                    is ApiResult.Success -> {
+                        if (result.value.title.isNotBlank()) {
+                            liveItem = result.value
+                        }
+                        val seasonsRes = ServiceLocator.catalogRepository.seasonsOf(subjectId)
+                        val castRes = ServiceLocator.catalogRepository.castOf(subjectId)
+                        liveSeasons = seasonsRes.getOrNull().orEmpty()
+                        liveCast = castRes.getOrNull().orEmpty()
+                        isLoading = false
+                    }
+                    else -> {
+                        isLoading = false
+                    }
                 }
             }
         } else {
             isLoading = false
         }
+    }
+
+    LaunchedEffect(itemId) {
+        loadDetails()
     }
 
     if (isLoading && liveItem == null) {
@@ -121,7 +134,44 @@ fun DetailsScreen(
         return
     }
 
-    val item = liveItem ?: return
+    if (liveItem == null) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                Icons.Outlined.WifiOff,
+                contentDescription = "Error",
+                modifier = Modifier.padding(bottom = 16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "Could not load details",
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Please check your internet connection and try again.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(24.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedButton(onClick = onBack) {
+                    Text("Go Back")
+                }
+                Button(onClick = { loadDetails() }) {
+                    Text("Retry")
+                }
+            }
+        }
+        return
+    }
+
+    val item = liveItem!!
     var inWatchlist by remember(itemId) { mutableStateOf(AppStore.isInWatchlist(item.id)) }
     var downloadState by remember(itemId) {
         mutableStateOf(AppStore.downloadEntry(item.id)?.state)
@@ -129,8 +179,6 @@ fun DetailsScreen(
     var selectedSeason by remember { mutableIntStateOf(1) }
     val seasons = if (liveSeasons.isNotEmpty()) liveSeasons else DemoRepository.episodesOf(item)
     val castMembers = if (liveCast.isNotEmpty()) liveCast else DemoRepository.castFor[item.id].orEmpty()
-    val trailers = DemoRepository.trailersFor[item.id].orEmpty()
-    val reviews = DemoRepository.reviewsFor[item.id].orEmpty()
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize()) {
@@ -139,37 +187,39 @@ fun DetailsScreen(
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .aspectRatio(if (LocalConfiguration.current.screenWidthDp >= 600) 21f / 9f else 16f / 9f),
+                        .aspectRatio(16f / 10f),
                 ) {
-                    AsyncImage(
-                        model = item.backdropUrl.ifEmpty { item.posterUrl },
-                        contentDescription = "Cinematic backdrop for ${item.title}",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    val imageUrl = item.backdropUrl.ifBlank { item.posterUrl }
+                    if (imageUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = item.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                     Box(
                         Modifier
                             .fillMaxSize()
                             .background(
                                 Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background),
-                                    startY = 300f,
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                                        MaterialTheme.colorScheme.surface,
+                                    ),
                                 ),
                             ),
                     )
                 }
-            }
 
-            item {
+                // ---- Metadata section ----
                 Column(Modifier.padding(horizontal = Spacing.md)) {
                     Text(
                         item.title,
                         style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
                     )
                     Spacer(Modifier.height(Spacing.xs))
-
-                    // ---- Metadata row ----
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
@@ -235,148 +285,106 @@ fun DetailsScreen(
                         ) {
                             Text(if (inWatchlist) "✓ In Watchlist" else "+ Watchlist")
                         }
-                        IconButton(onClick = {
-                            AppStore.toggleDownload(item.id)
-                            downloadState = AppStore.downloadEntry(item.id)?.state
-                        }) {
-                            Icon(
-                                if (downloadState == com.cinenova.app.data.DownloadState.COMPLETED)
-                                    Icons.Outlined.DownloadDone else Icons.Outlined.Download,
-                                contentDescription = "Toggle download for ${item.title}",
-                                tint = if (downloadState != null) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(onClick = {}) {
-                            Icon(Icons.Outlined.Share, contentDescription = "Share ${item.title}")
-                        }
                     }
 
                     Spacer(Modifier.height(Spacing.lg))
+                }
+            }
 
-                    // ---- TV episodes ----
-                    if (item.type == MediaType.TV && seasons.isNotEmpty()) {
-                        Text("Episodes", style = MaterialTheme.typography.titleLarge)
+            // ---- TV Seasons / Episodes ----
+            if (item.type == MediaType.TV && seasons.isNotEmpty()) {
+                item {
+                    val seasonNumbers = seasons.map { it.number }
+                    if (seasonNumbers.size > 1) {
+                        SeasonSelector(
+                            seasons = seasonNumbers,
+                            selected = selectedSeason,
+                            onSelect = { selectedSeason = it },
+                        )
                         Spacer(Modifier.height(Spacing.sm))
-                        SeasonSelector(seasons, selectedSeason, onSelect = { selectedSeason = it })
-                        Spacer(Modifier.height(Spacing.sm))
-                        seasons.firstOrNull { it.number == selectedSeason }?.episodes?.forEach { episode ->
-                            EpisodeCard(
-                                episode = episode,
-                                watched = episode.episodeNumber < selectedSeason + 1,
-                                onPlay = { onPlay(item.id) },
-                            )
-                        }
-                        Spacer(Modifier.height(Spacing.lg))
                     }
+                }
+                val currentSeason = seasons.firstOrNull { it.number == selectedSeason } ?: seasons.firstOrNull()
+                items(currentSeason?.episodes?.size ?: 0) { index ->
+                    val ep = currentSeason!!.episodes[index]
+                    EpisodeCard(
+                        episode = ep,
+                        onClick = { onPlay(item.id) },
+                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                    )
+                }
+            }
 
-                    // ---- Cast & Crew ----
-                    if (castMembers.isNotEmpty()) {
-                        Text("Cast & Crew", style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.height(Spacing.sm))
-                        Row(
-                            Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                        ) {
-                            castMembers.forEach { member ->
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    AsyncImage(
-                                        model = member.avatarUrl,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .size(72.dp)
-                                            .clip(CircleShape),
-                                    )
-                                    Spacer(Modifier.height(Spacing.xs))
-                                    Text(member.name, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                                    Text(
-                                        member.role,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(Spacing.lg))
-                    }
-
-                    // ---- Trailers ----
-                    if (trailers.isNotEmpty()) {
-                        Text("Trailers & Extras", style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.height(Spacing.sm))
-                        trailers.forEach { trailer ->
-                            Row(
-                                Modifier.padding(vertical = Spacing.xs),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                            ) {
-                                Icon(
-                                    Icons.Outlined.PlayArrow,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                                Text("${trailer.title} · ${trailer.durationMinutes}:00",
-                                    style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
-                        Spacer(Modifier.height(Spacing.lg))
-                    }
-
-                    // ---- Reviews ----
-                    if (reviews.isNotEmpty()) {
-                        Text("Reviews", style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.height(Spacing.sm))
-                        reviews.forEach { review ->
-                            Column(Modifier.padding(vertical = Spacing.xs)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(review.author, style = MaterialTheme.typography.titleSmall)
-                                    Spacer(Modifier.width(Spacing.sm))
-                                    RatingBadge(review.rating)
-                                    Spacer(Modifier.weight(1f))
-                                    Text(
-                                        review.date,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                Text(review.text, style = MaterialTheme.typography.bodyMedium)
-                            }
-                            HorizontalDivider(
-                                Modifier.padding(vertical = Spacing.sm),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                            )
-                        }
-                    }
-
-                    // ---- More Like This ----
-                    Text("More Like This", style = MaterialTheme.typography.titleLarge)
+            // ---- Cast horizontal rail ----
+            if (castMembers.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(Spacing.md))
+                    Text(
+                        "Cast & Crew",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = Spacing.md),
+                    )
                     Spacer(Modifier.height(Spacing.sm))
                     Row(
-                        Modifier.horizontalScroll(rememberScrollState()),
+                        Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = Spacing.md),
                         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
-                        DemoRepository.catalog.filter { it.id != item.id }.take(8).forEach { similar ->
-                            com.cinenova.app.ui.components.MoviePosterCard(
-                                item = similar,
-                                onClick = { onOpenDetails(similar.id) },
-                                width = 110.dp,
-                            )
+                        castMembers.forEach { member ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.width(72.dp),
+                            ) {
+                                if (member.avatarUrl.isNotBlank()) {
+                                    AsyncImage(
+                                        model = member.avatarUrl,
+                                        contentDescription = member.name,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(CircleShape),
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    )
+                                }
+                                Spacer(Modifier.height(Spacing.xs))
+                                Text(
+                                    member.name,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    member.role,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
-
                     Spacer(Modifier.height(Spacing.xl))
                 }
             }
         }
 
+        // Top bar back button overlay
         TopAppBar(
             title = {},
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),

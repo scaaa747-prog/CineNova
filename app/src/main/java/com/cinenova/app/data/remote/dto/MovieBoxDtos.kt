@@ -121,29 +121,49 @@ data class SubjectSummaryDto(
     @SerializedName("name") val name: String? = null,
     @SerializedName("year") val year: Int? = null,
     @SerializedName("releaseDate") val releaseDate: String? = null,
-    @SerializedName("score") val score: Double? = null,
-    @SerializedName("rating") val rating: Double? = null,
+    @SerializedName("score") val score: JsonElement? = null,
+    @SerializedName("rating") val rating: JsonElement? = null,
+    @SerializedName("imdbRatingValue") val imdbRatingValue: String? = null,
     @SerializedName("imdbRate") val imdbRate: String? = null,
     @SerializedName("cover") val cover: ImageDto? = null,
     @SerializedName("poster") val poster: ImageDto? = null,
     @SerializedName("subjectType") val subjectType: Int? = null,
-    @SerializedName("category") val category: Int? = null,
+    @SerializedName("category") val category: JsonElement? = null,
     @SerializedName("genre") val genre: String? = null,
     @SerializedName("genres") val genres: List<String>? = null,
     @SerializedName("description") val description: String? = null,
     @SerializedName("seconds") val seconds: Int? = null,
-    @SerializedName("duration") val durationMinutes: Int? = null,
+    @SerializedName("durationSeconds") val durationSeconds: Int? = null,
+    @SerializedName("duration") val duration: String? = null,
     @SerializedName("countryName") val countryName: String? = null,
 ) {
     fun resolvedId(): String = subjectId ?: id.orEmpty()
     fun resolvedTitle(): String = title ?: name.orEmpty()
     fun resolvedYear(): Int = releaseDate?.take(4)?.toIntOrNull() ?: year ?: 0
-    fun resolvedRating(): Double = imdbRate?.toDoubleOrNull() ?: score ?: rating ?: 0.0
+    fun resolvedRating(): Double {
+        val rateStr = imdbRatingValue ?: imdbRate
+        if (!rateStr.isNullOrBlank()) {
+            rateStr.toDoubleOrNull()?.let { return it }
+        }
+        score?.let {
+            if (it.isJsonPrimitive) it.asString.toDoubleOrNull()?.let { s -> return s }
+        }
+        rating?.let {
+            if (it.isJsonPrimitive) it.asString.toDoubleOrNull()?.let { r -> return r }
+        }
+        return 0.0
+    }
     fun resolvedPoster(): String? = cover?.url ?: poster?.url
     fun resolvedBackdrop(): String? = cover?.url ?: poster?.url
     fun resolvedGenres(): List<String> =
         genre?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
             ?: genres.orEmpty()
+    fun resolvedCategory(): Int? = when {
+        category == null -> null
+        category.isJsonPrimitive && category.asJsonPrimitive.isNumber -> category.asInt
+        category.isJsonPrimitive && category.asJsonPrimitive.isString -> category.asString.toIntOrNull()
+        else -> null
+    }
 }
 
 // ---------- Subject detail ----------
@@ -164,23 +184,26 @@ data class SubjectDetailDto(
     @SerializedName("name") val name: String? = null,
     @SerializedName("year") val year: Int? = null,
     @SerializedName("releaseDate") val releaseDate: String? = null,
-    @SerializedName("score") val score: Double? = null,
-    @SerializedName("rating") val rating: Double? = null,
+    @SerializedName("score") val score: JsonElement? = null,
+    @SerializedName("rating") val rating: JsonElement? = null,
+    @SerializedName("imdbRatingValue") val imdbRatingValue: String? = null,
     @SerializedName("imdbRate") val imdbRate: String? = null,
+    @SerializedName("contentRating") val contentRating: String? = null,
     @SerializedName("ageRating") val ageRating: String? = null,
     @SerializedName("mpa") val mpa: String? = null,
     @SerializedName("seconds") val seconds: Int? = null,
     @SerializedName("durationSeconds") val durationSeconds: Int? = null,
-    @SerializedName("runtime") val runtimeMinutes: Int? = null,
+    @SerializedName("duration") val duration: String? = null,
     @SerializedName("description") val description: String? = null,
     @SerializedName("introduction") val introduction: String? = null,
     @SerializedName("cover") val cover: ImageDto? = null,
     @SerializedName("poster") val poster: ImageDto? = null,
     @SerializedName("subjectType") val subjectType: Int? = null,
-    @SerializedName("category") val category: Int? = null,
+    @SerializedName("category") val category: JsonElement? = null,
     @SerializedName("genre") val genre: String? = null,
     @SerializedName("genres") val genres: List<String>? = null,
     @SerializedName("countryName") val countryName: String? = null,
+    @SerializedName("staffList") val staffList: List<CastMemberDto>? = null,
     @SerializedName("cast") val cast: List<CastMemberDto>? = null,
     @SerializedName("actors") val actors: List<CastMemberDto>? = null,
     @SerializedName("seasons") val seasons: List<SeasonDto>? = null,
@@ -188,15 +211,46 @@ data class SubjectDetailDto(
     fun resolvedId(): String = subjectId ?: id.orEmpty()
     fun resolvedTitle(): String = title ?: name.orEmpty()
     fun resolvedYear(): Int = releaseDate?.take(4)?.toIntOrNull() ?: year ?: 0
-    fun resolvedRating(): Double = imdbRate?.toDoubleOrNull() ?: score ?: rating ?: 0.0
-    fun resolvedRuntime(): Int = (durationSeconds ?: seconds ?: 0) / 60
+    fun resolvedRating(): Double {
+        val rateStr = imdbRatingValue ?: imdbRate
+        if (!rateStr.isNullOrBlank()) {
+            rateStr.toDoubleOrNull()?.let { return it }
+        }
+        score?.let {
+            if (it.isJsonPrimitive) it.asString.toDoubleOrNull()?.let { s -> return s }
+        }
+        rating?.let {
+            if (it.isJsonPrimitive) it.asString.toDoubleOrNull()?.let { r -> return r }
+        }
+        return 0.0
+    }
+    fun resolvedRuntime(): Int {
+        val sec = durationSeconds ?: seconds
+        if (sec != null && sec > 0) return sec / 60
+        duration?.let { d ->
+            var mins = 0
+            val hMatch = Regex("(\\d+)\\s*h").find(d)
+            val mMatch = Regex("(\\d+)\\s*m").find(d)
+            if (hMatch != null) mins += (hMatch.groupValues[1].toIntOrNull() ?: 0) * 60
+            if (mMatch != null) mins += (mMatch.groupValues[1].toIntOrNull() ?: 0)
+            if (mins > 0) return mins
+        }
+        return 0
+    }
     fun resolvedDescription(): String = description ?: introduction.orEmpty()
     fun resolvedPoster(): String? = cover?.url ?: poster?.url
     fun resolvedBackdrop(): String? = cover?.url ?: poster?.url
     fun resolvedGenres(): List<String> =
         genre?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
             ?: genres.orEmpty()
-    fun resolvedCast(): List<CastMemberDto> = cast ?: actors.orEmpty()
+    fun resolvedCast(): List<CastMemberDto> = staffList ?: cast ?: actors.orEmpty()
+    fun resolvedAgeRating(): String = contentRating ?: ageRating ?: mpa ?: "NR"
+    fun resolvedCategory(): Int? = when {
+        category == null -> null
+        category.isJsonPrimitive && category.asJsonPrimitive.isNumber -> category.asInt
+        category.isJsonPrimitive && category.asJsonPrimitive.isString -> category.asString.toIntOrNull()
+        else -> null
+    }
 }
 
 data class CastMemberDto(
@@ -205,8 +259,9 @@ data class CastMemberDto(
     @SerializedName("role") val role: String? = null,
     @SerializedName("avatar") val avatar: ImageDto? = null,
     @SerializedName("photo") val photo: ImageDto? = null,
+    @SerializedName("staffType") val staffType: Int? = null,
 ) {
-    fun resolvedRole(): String = character ?: role.orEmpty()
+    fun resolvedRole(): String = character?.takeIf { it.isNotBlank() } ?: role.orEmpty()
     fun resolvedAvatar(): String? = avatar?.url ?: photo?.url
 }
 
@@ -223,13 +278,15 @@ data class EpisodeDto(
     @SerializedName("ep") val ep: Int? = null,
     @SerializedName("title") val title: String? = null,
     @SerializedName("runtime") val runtimeMinutes: Int? = null,
-    @SerializedName("duration") val durationMinutes: Int? = null,
+    @SerializedName("durationSeconds") val durationSeconds: Int? = null,
+    @SerializedName("duration") val duration: String? = null,
     @SerializedName("description") val description: String? = null,
     @SerializedName("thumb") val thumb: ImageDto? = null,
+    @SerializedName("cover") val cover: ImageDto? = null,
 ) {
     fun resolvedNumber(): Int = episodeNumber ?: ep ?: 0
-    fun resolvedRuntime(): Int = runtimeMinutes ?: durationMinutes ?: 0
-    fun resolvedThumb(): String? = thumb?.url
+    fun resolvedRuntime(): Int = (durationSeconds ?: 0) / 60
+    fun resolvedThumb(): String? = thumb?.url ?: cover?.url
 }
 
 // ---------- Resources / playback ----------

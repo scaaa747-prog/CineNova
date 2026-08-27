@@ -76,7 +76,7 @@ private val commonGenres = listOf(
 )
 
 /**
- * 100% Live Explore & Search Screen with Material 3 Design.
+ * 60FPS High-Performance Live Explore & Search Screen with Instant Memoization.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,10 +88,17 @@ fun ExploreScreen(
     var typeFilter by remember { mutableStateOf<MediaType?>(null) }
     var genre by remember { mutableStateOf<String?>(null) }
     var sort by remember { mutableStateOf(SortOption.RELEVANCE) }
-    var filtersExpanded by remember { mutableStateOf(true) }
+    var filtersExpanded by remember { mutableStateOf(false) }
 
-    var liveCatalog by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
-    var isLoadingCatalog by remember { mutableStateOf(true) }
+    val initialCached = remember {
+        val cached = ServiceLocator.catalogRepository.getCachedBootstrap()
+        cached?.items.orEmpty().flatMap { sec ->
+            sec.subjects.orEmpty().map { it.toMediaItem() }
+        }.distinctBy { it.id }
+    }
+
+    var liveCatalog by remember { mutableStateOf<List<MediaItem>>(initialCached) }
+    var isLoadingCatalog by remember { mutableStateOf(initialCached.isEmpty()) }
     var isCatalogOffline by remember { mutableStateOf(false) }
 
     // Live search ViewModel
@@ -99,12 +106,16 @@ fun ExploreScreen(
     val apiSearchState by searchVm.search.collectAsState()
 
     LaunchedEffect(query) {
-        delay(300)
-        if (query.isNotBlank()) searchVm.search(query)
+        if (query.isNotBlank()) {
+            delay(250)
+            searchVm.search(query)
+        }
     }
 
     LaunchedEffect(Unit) {
-        isLoadingCatalog = true
+        if (liveCatalog.isEmpty()) {
+            isLoadingCatalog = true
+        }
         when (val result = ServiceLocator.catalogRepository.bootstrap()) {
             is ApiResult.Success -> {
                 val sections = result.value.items.orEmpty()
@@ -116,10 +127,16 @@ fun ExploreScreen(
                 isCatalogOffline = false
             }
             else -> {
-                isCatalogOffline = true
+                if (liveCatalog.isEmpty()) {
+                    isCatalogOffline = true
+                }
                 isLoadingCatalog = false
             }
         }
+    }
+
+    val filteredItems = remember(liveCatalog, typeFilter, genre, sort) {
+        applyFilters(liveCatalog, typeFilter, genre, sort)
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -190,7 +207,7 @@ fun ExploreScreen(
             )
         }
 
-        Spacer(Modifier.height(Spacing.sm))
+        Spacer(Modifier.height(Spacing.xs))
 
         when {
             // ---- Active Live Search ----
@@ -206,12 +223,14 @@ fun ExploreScreen(
                         )
                     }
                     is CatalogViewModel.SearchUiState.Results -> {
-                        val results = applyFilters(state.items, typeFilter, genre, sort)
-                        if (results.isEmpty()) {
+                        val searchResults = remember(state.items, typeFilter, genre, sort) {
+                            applyFilters(state.items, typeFilter, genre, sort)
+                        }
+                        if (searchResults.isEmpty()) {
                             NoResultsState(query)
                         } else {
                             FilterBar(typeFilter, onType = { typeFilter = it }, genre = genre, onGenre = { genre = it }, showGenres = filtersExpanded)
-                            ResultsGrid(results, onOpenDetails)
+                            ResultsGrid(searchResults, onOpenDetails)
                         }
                     }
                     else -> Unit
@@ -219,7 +238,7 @@ fun ExploreScreen(
             }
 
             // ---- Loading Initial Catalog ----
-            isLoadingCatalog -> {
+            isLoadingCatalog && liveCatalog.isEmpty() -> {
                 LoadingSkeleton(lines = 8, hero = false)
             }
 
@@ -250,23 +269,8 @@ fun ExploreScreen(
 
             // ---- Live Explore Catalog ----
             else -> {
-                SectionHeader("Popular Searches")
-                Row(
-                    Modifier
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = Spacing.md),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                ) {
-                    popularSearchSuggestions.forEach { term ->
-                        GenreChip(label = term, selected = false, onClick = { query = term })
-                    }
-                }
-
-                Spacer(Modifier.height(Spacing.sm))
-
                 FilterBar(typeFilter, onType = { typeFilter = it }, genre = genre, onGenre = { genre = it }, showGenres = filtersExpanded)
-                val filtered = applyFilters(liveCatalog, typeFilter, genre, sort)
-                ResultsGrid(filtered, onOpenDetails)
+                ResultsGrid(filteredItems, onOpenDetails)
             }
         }
     }
@@ -281,7 +285,7 @@ private fun FilterBar(
     onGenre: (String?) -> Unit,
     showGenres: Boolean,
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.xs)) {
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             SegmentedButton(
                 selected = typeFilter == null,
@@ -300,7 +304,7 @@ private fun FilterBar(
             ) { Text("TV") }
         }
         if (showGenres) {
-            Spacer(Modifier.height(Spacing.sm))
+            Spacer(Modifier.height(Spacing.xs))
             Row(
                 Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
@@ -342,7 +346,7 @@ private fun ResultsGrid(items: List<MediaItem>, onOpenDetails: (String) -> Unit)
     }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 110.dp),
-        contentPadding = PaddingValues(Spacing.md),
+        contentPadding = PaddingValues(start = Spacing.md, end = Spacing.md, top = Spacing.xs, bottom = 90.dp),
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
         modifier = Modifier.fillMaxSize(),

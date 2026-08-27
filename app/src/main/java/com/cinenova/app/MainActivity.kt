@@ -30,20 +30,19 @@ class MainActivity : ComponentActivity() {
         }
 
         val imageLoader = ImageLoader.Builder(this)
-            .bitmapConfig(Bitmap.Config.RGB_565)
-            .allowRgb565(true)
-            .crossfade(true)
+            .allowHardware(true)
+            .crossfade(false)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.20)
+                    .maxSizePercent(0.25)
                     .build()
             }
             .diskCachePolicy(CachePolicy.ENABLED)
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(150L * 1024 * 1024)
+                    .maxSizeBytes(200L * 1024 * 1024)
                     .build()
             }
             .respectCacheHeaders(false)

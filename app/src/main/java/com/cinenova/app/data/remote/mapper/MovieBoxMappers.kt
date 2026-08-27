@@ -1,12 +1,14 @@
 package com.cinenova.app.data.remote.mapper
 
 import com.cinenova.app.data.CastMember
+import com.cinenova.app.data.DubOption
 import com.cinenova.app.data.Episode
 import com.cinenova.app.data.MediaItem
 import com.cinenova.app.data.MediaType
 import com.cinenova.app.data.Season
 import com.cinenova.app.data.remote.PlaybackResources
 import com.cinenova.app.data.remote.StreamResource
+import com.cinenova.app.data.remote.SubtitleTrack
 import com.cinenova.app.data.remote.dto.CastMemberDto
 import com.cinenova.app.data.remote.dto.EpisodeDto
 import com.cinenova.app.data.remote.dto.ResourceResponseDto
@@ -44,6 +46,10 @@ fun SubjectDetailDto.toMediaItem(): MediaItem = MediaItem(
     posterUrl = resolvedPoster() ?: "",
     backdropUrl = resolvedBackdrop() ?: resolvedPoster() ?: "",
     type = (subjectType ?: resolvedCategory()).toMediaTypeOrDefault(),
+    dubs = dubs.orEmpty().mapNotNull { d ->
+        val sId = d.subjectId ?: return@mapNotNull null
+        DubOption(subjectId = sId, languageName = d.lanName ?: d.lan ?: "Dub")
+    },
 )
 
 fun SubjectDetailResponseDto.toMediaItem(subjectId: Long): MediaItem {
@@ -92,6 +98,14 @@ fun ResourceResponseDto.toPlaybackResources(
     val items = itemsOrEmpty()
     val sources = items.mapNotNull { item ->
         item.resolvedUrl()?.let { url ->
+            val subs = item.extCaptions.orEmpty().mapNotNull { c ->
+                val cUrl = c.url ?: return@mapNotNull null
+                SubtitleTrack(
+                    language = c.lan.orEmpty(),
+                    languageName = c.lanName ?: c.lan ?: "Subtitle",
+                    url = cUrl,
+                )
+            }
             StreamResource(
                 url = url,
                 qualityLabel = item.resolvedQualityLabel(),
@@ -99,6 +113,7 @@ fun ResourceResponseDto.toPlaybackResources(
                 format = item.format ?: item.codecName,
                 season = item.season ?: season,
                 episode = item.episode ?: episode,
+                subtitles = subs,
             )
         }
     }.distinctBy { it.url }

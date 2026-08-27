@@ -177,6 +177,7 @@ private fun AppNavHost(
                 onBack = { navController.popBackStack() },
                 onPlay = { navController.navigate(Routes.player(it)) },
                 onOpenDetails = { navController.navigate(Routes.details(it)) },
+                onNavigateDownloads = { navigateToTab(navController, Routes.DOWNLOADS) },
             )
         }
         composable(Routes.PLAYER) { entry ->

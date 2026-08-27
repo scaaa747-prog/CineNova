@@ -2,6 +2,11 @@ package com.cinenova.app.data
 
 enum class MediaType { MOVIE, TV }
 
+data class DubOption(
+    val subjectId: String,
+    val languageName: String,
+)
+
 data class MediaItem(
     val id: String,
     val title: String,
@@ -14,6 +19,7 @@ data class MediaItem(
     val type: MediaType = MediaType.MOVIE,
     val posterUrl: String = "",
     val backdropUrl: String = "",
+    val dubs: List<DubOption> = emptyList(),
 )
 
 data class CastMember(
@@ -69,6 +75,8 @@ data class DownloadEntry(
     val episodeLabel: String? = null,
     val title: String? = null,
     val posterUrl: String? = null,
+    val qualityLabel: String? = null,
+    val downloadUrl: String? = null,
 )
 
 enum class NotificationKind { NEW_RELEASE, NEW_EPISODE, RECOMMENDATION, DOWNLOAD_COMPLETE, APP }

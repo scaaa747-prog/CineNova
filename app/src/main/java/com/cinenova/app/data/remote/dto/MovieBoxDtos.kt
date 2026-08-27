@@ -18,7 +18,7 @@ data class ApiEnvelope<T>(
     @SerializedName("data") val data: T? = null,
 )
 
-// ---------- Image Wrapper (Handles both string URL and object with url) ----------
+// ---------- Image Wrapper ----------
 @JsonAdapter(ImageDtoDeserializer::class)
 data class ImageDto(
     @SerializedName("url") val url: String? = null,
@@ -177,6 +177,12 @@ data class SubjectDetailResponseDto(
     fun resolvedDetail(): SubjectDetailDto? = data ?: subject
 }
 
+data class DubDto(
+    @SerializedName("subjectId") val subjectId: String? = null,
+    @SerializedName("lanName") val lanName: String? = null,
+    @SerializedName("lan") val lan: String? = null,
+)
+
 data class SubjectDetailDto(
     @SerializedName("subjectId") val subjectId: String? = null,
     @SerializedName("id") val id: String? = null,
@@ -207,6 +213,7 @@ data class SubjectDetailDto(
     @SerializedName("cast") val cast: List<CastMemberDto>? = null,
     @SerializedName("actors") val actors: List<CastMemberDto>? = null,
     @SerializedName("seasons") val seasons: List<SeasonDto>? = null,
+    @SerializedName("dubs") val dubs: List<DubDto>? = null,
 ) {
     fun resolvedId(): String = subjectId ?: id.orEmpty()
     fun resolvedTitle(): String = title ?: name.orEmpty()
@@ -290,6 +297,12 @@ data class EpisodeDto(
 }
 
 // ---------- Resources / playback ----------
+data class CaptionDto(
+    @SerializedName("lan") val lan: String? = null,
+    @SerializedName("lanName") val lanName: String? = null,
+    @SerializedName("url") val url: String? = null,
+)
+
 data class ResourceResponseDto(
     @SerializedName("code") val code: Int? = null,
     @SerializedName("message") val message: String? = null,
@@ -318,9 +331,18 @@ data class ResourceItemDto(
     @SerializedName("codecName") val codecName: String? = null,
     @SerializedName("se") val season: Int? = null,
     @SerializedName("ep") val episode: Int? = null,
+    @SerializedName("extCaptions") val extCaptions: List<CaptionDto>? = null,
 ) {
-    fun resolvedQualityLabel(): String =
-        quality ?: resolution?.toString() ?: ""
+    fun resolvedQualityLabel(): String {
+        val q = quality ?: resolution?.toString() ?: ""
+        return when {
+            q.contains("1080") -> "1080P Full HD"
+            q.contains("720") -> "720P HD"
+            q.contains("480") -> "480P Data Saver"
+            q.isNotBlank() -> q
+            else -> "HD"
+        }
+    }
 
     fun resolvedUrl(): String? = resourceLink ?: url
 

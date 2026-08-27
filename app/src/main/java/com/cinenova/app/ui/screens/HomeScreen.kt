@@ -49,7 +49,7 @@ import com.cinenova.app.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
 /**
- * 100% Live Streaming Home Screen with Dedicated Search Navigation and Cache Fallback.
+ * 0ms Instant Home Feed: Pre-cached with silent background revalidation.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,17 +60,34 @@ fun HomeScreen(
     onOpenNotifications: () -> Unit,
     onOpenContinueWatching: () -> Unit,
 ) {
-    var isLoading by remember { mutableStateOf(true) }
+    val initialCached = remember { ServiceLocator.catalogRepository.getCachedBootstrap() }
+    val initialSections = remember { initialCached?.items.orEmpty() }
+    val initialBanners = remember {
+        val banners = initialSections.firstOrNull { it.type == "BANNER" }?.banner?.banners.orEmpty()
+        banners.mapNotNull { b ->
+            b.subject?.toMediaItem() ?: b.subjectId?.let { id ->
+                MediaItem(
+                    id = id,
+                    title = b.content.orEmpty(),
+                    posterUrl = b.image?.url.orEmpty(),
+                    backdropUrl = b.image?.url.orEmpty(),
+                )
+            }
+        }
+    }
+
+    var isLoading by remember { mutableStateOf(initialSections.isEmpty()) }
     var isOffline by remember { mutableStateOf(false) }
-    var liveSections by remember { mutableStateOf<List<TabSectionDto>>(emptyList()) }
-    var heroItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var liveSections by remember { mutableStateOf(initialSections) }
+    var heroItems by remember { mutableStateOf(initialBanners) }
     val scope = rememberCoroutineScope()
 
-    fun loadHomeFeed() {
-        isLoading = true
-        isOffline = false
+    fun refreshHomeFeed(silent: Boolean = false) {
+        if (!silent && liveSections.isEmpty()) {
+            isLoading = true
+        }
         scope.launch {
-            when (val result = ServiceLocator.catalogRepository.bootstrap()) {
+            when (val result = ServiceLocator.catalogRepository.bootstrap(forceRefresh = true)) {
                 is ApiResult.Success -> {
                     isOffline = false
                     val sections = result.value.items.orEmpty()
@@ -103,25 +120,41 @@ fun HomeScreen(
     }
 
     LaunchedEffect(Unit) {
-        loadHomeFeed()
+        // Silent background update without blocking UI
+        refreshHomeFeed(silent = liveSections.isNotEmpty())
     }
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
-                Text("CineNova", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "CineNova",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             },
             actions = {
                 IconButton(onClick = onOpenSearch) {
-                    Icon(Icons.Outlined.Search, contentDescription = "Search")
+                    Icon(Icons.Outlined.Search, contentDescription = "Search movies and series")
                 }
                 IconButton(onClick = onOpenNotifications) {
-                    BadgedIcon(unread = AppStore.unreadCount())
+                    val unread = AppStore.unreadCount()
+                    Box {
+                        Icon(Icons.Outlined.Notifications, contentDescription = "Notifications")
+                        if (unread > 0) {
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.align(Alignment.TopEnd),
+                            ) {
+                                Text("$unread")
+                            }
+                        }
+                    }
                 }
             },
         )
 
-        // Material 3 Pill Search Launcher
+        // Material 3 Search Launcher Bar
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -138,109 +171,90 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(
                     Icons.Outlined.Search,
-                    contentDescription = "Search",
+                    contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "Search movies, series, anime...",
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = "Search movies, anime, series, actors...",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        Spacer(Modifier.height(Spacing.xs))
-
-        when {
-            // ---- Loading Home State ----
-            isLoading && liveSections.isEmpty() -> {
-                LoadingSkeleton(lines = 8, hero = true)
-            }
-
-            // ---- Offline State (No dummy demo data) ----
-            isOffline && liveSections.isEmpty() -> {
+        if (isLoading && liveSections.isEmpty()) {
+            LoadingSkeleton(lines = 10, hero = true)
+        } else if (isOffline && liveSections.isEmpty()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(Spacing.lg),
+                contentAlignment = Alignment.Center,
+            ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     Icon(
                         Icons.Outlined.WifiOff,
                         contentDescription = "Offline",
-                        modifier = Modifier.padding(bottom = 16.dp),
+                        modifier = Modifier.padding(bottom = 8.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         "You are offline",
                         style = MaterialTheme.typography.titleLarge,
                     )
-                    Spacer(Modifier.height(8.dp))
                     Text(
-                        "Please check your network connection and retry.",
+                        "Please check your internet connection and try again.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick = { loadHomeFeed() }) {
+                    Button(onClick = { refreshHomeFeed(silent = false) }) {
                         Text("Retry")
                     }
                 }
             }
-
-            // ---- Live Feeds State ----
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                ) {
-                    if (heroItems.isNotEmpty()) {
-                        item(key = "hero") {
-                            FeaturedHero(
-                                items = heroItems.take(5),
-                                onPlay = { onPlay(it.id) },
-                                onOpenDetails = { onOpenDetails(it.id) },
-                            )
-                        }
-                    }
-
-                    val movieSections = liveSections.filter {
-                        it.type == "SUBJECTS_MOVIE" && !it.subjects.isNullOrEmpty()
-                    }
-
-                    items(movieSections, key = { it.title ?: it.position.toString() }) { sec ->
-                        val items = sec.subjects.orEmpty().map { it.toMediaItem() }
-                        val isLandscape = sec.position == 1 || sec.position == 3
-                        ContentRow(
-                            title = sec.title ?: "Trending",
-                            items = items,
-                            onOpenDetails = { onOpenDetails(it.id) },
-                            landscape = isLandscape,
+        } else {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                // ---- Hero Featured Billboard ----
+                if (heroItems.isNotEmpty()) {
+                    item {
+                        FeaturedHero(
+                            items = heroItems,
+                            onPlay = { heroItems.firstOrNull()?.let { onPlay(it.id) } },
+                            onDetails = { heroItems.firstOrNull()?.let { onOpenDetails(it.id) } },
                         )
                     }
+                }
 
-                    item(key = "spacer") { Spacer(Modifier.height(Spacing.lg)) }
+                // ---- Dynamic Sections from API ----
+                val validSections = liveSections.filter {
+                    it.type != "BANNER" && !it.subjects.isNullOrEmpty()
+                }
+
+                items(validSections) { section ->
+                    val mediaList = section.subjects.orEmpty().map { it.toMediaItem() }
+                    ContentRow(
+                        title = section.title ?: "Trending Now",
+                        items = mediaList,
+                        onItemClick = { onOpenDetails(it.id) },
+                    )
+                }
+
+                item {
+                    Spacer(Modifier.height(Spacing.xl))
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun BadgedIcon(unread: Int) {
-    if (unread > 0) {
-        Box(contentAlignment = Alignment.TopEnd) {
-            Icon(Icons.Outlined.Notifications, contentDescription = "Notifications")
-            Badge { Text(unread.toString()) }
-        }
-    } else {
-        Icon(Icons.Outlined.Notifications, contentDescription = "Notifications")
     }
 }

@@ -326,7 +326,7 @@ private fun AppNavHost(
         composable(Routes.CONTINUE_WATCHING) {
             ContinueWatchingScreen(
                 onBack = { navController.popBackStack() },
-                onPlay = { navController.navigate(Routes.player(it)) },
+                onResume = { navController.navigate(Routes.player(it)) },
                 onOpenDetails = { navController.navigate(Routes.details(it)) },
             )
         }

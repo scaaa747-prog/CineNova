@@ -17,9 +17,8 @@ import com.cinenova.app.ui.theme.CineNovaTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppStore.init(this)
 
-        // Low-data & memory-efficient ImageLoader configuration:
-        // Uses RGB_565 (50% memory / data savings) + persistent disk cache
         val imageLoader = ImageLoader.Builder(this)
             .bitmapConfig(Bitmap.Config.RGB_565)
             .allowRgb565(true)
@@ -34,7 +33,7 @@ class MainActivity : ComponentActivity() {
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(150L * 1024 * 1024) // 150MB disk cache
+                    .maxSizeBytes(150L * 1024 * 1024)
                     .build()
             }
             .respectCacheHeaders(false)

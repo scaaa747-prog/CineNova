@@ -1,6 +1,9 @@
 package com.cinenova.app.ui.screens
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,17 +12,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.ClosedCaption
+import androidx.compose.material.icons.outlined.Contrast
+import androidx.compose.material.icons.outlined.DataSaverOn
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,31 +41,40 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import com.cinenova.app.data.AppStore
 import com.cinenova.app.ui.components.SectionHeader
 import com.cinenova.app.ui.components.SettingItem
 import com.cinenova.app.ui.components.SettingsDivider
-import com.cinenova.app.ui.theme.ThemeMode
 import com.cinenova.app.ui.theme.Spacing
+import com.cinenova.app.ui.theme.ThemeMode
 
 /**
- * Profile = app settings & preferences. No accounts, no login.
+ * 100% Functional Settings & Preferences screen (Material 3).
+ * Direct SharedPreferences persistence with real streaming & download controls.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(onManageDownloads: () -> Unit) {
-    var showLanguageDialog by remember { mutableStateOf(false) }
-    var showSubtitleDialog by remember { mutableStateOf(false) }
-    var showAudioDialog by remember { mutableStateOf(false) }
+    var showStreamQualityDialog by remember { mutableStateOf(false) }
+    var showSpeedDialog by remember { mutableStateOf(false) }
+    var showDownloadQualityDialog by remember { mutableStateOf(false) }
+    var showSubtitleLangDialog by remember { mutableStateOf(false) }
+    var showSubtitleSizeDialog by remember { mutableStateOf(false) }
+    var showAudioLangDialog by remember { mutableStateOf(false) }
+    var showAppLangDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
 
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        TopAppBar(title = { Text("Profile") })
+        TopAppBar(title = { Text("Settings") })
 
         // ---- Appearance ----
         SectionHeader("Appearance")
@@ -69,59 +82,54 @@ fun ProfileScreen(onManageDownloads: () -> Unit) {
             icon = Icons.Outlined.Contrast,
             title = "Theme",
             subtitle = when (AppStore.themeMode) {
-                ThemeMode.LIGHT -> "Light"
-                ThemeMode.DARK -> "Dark"
-                ThemeMode.SYSTEM -> "System default"
+                ThemeMode.LIGHT -> "Light Theme"
+                ThemeMode.DARK -> "Dark Theme"
+                ThemeMode.SYSTEM -> "Follow System"
             },
         )
         SingleChoiceSegmentedButtonRow(
             Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = Spacing.md),
         ) {
             SegmentedButton(
                 selected = AppStore.themeMode == ThemeMode.LIGHT,
-                onClick = { AppStore.themeMode = ThemeMode.LIGHT },
+                onClick = { AppStore.setTheme(ThemeMode.LIGHT) },
                 shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
             ) { Text("Light") }
             SegmentedButton(
                 selected = AppStore.themeMode == ThemeMode.DARK,
-                onClick = { AppStore.themeMode = ThemeMode.DARK },
+                onClick = { AppStore.setTheme(ThemeMode.DARK) },
                 shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
             ) { Text("Dark") }
             SegmentedButton(
                 selected = AppStore.themeMode == ThemeMode.SYSTEM,
-                onClick = { AppStore.themeMode = ThemeMode.SYSTEM },
+                onClick = { AppStore.setTheme(ThemeMode.SYSTEM) },
                 shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
             ) { Text("System") }
         }
         SettingsDivider()
 
         // ---- Playback ----
-        SectionHeader("Playback")
+        SectionHeader("Playback & Video")
         SettingItem(
             icon = Icons.Outlined.HighQuality,
-            title = "Streaming quality",
+            title = "Streaming Quality",
             subtitle = AppStore.streamingQuality.value,
-            onClick = {
-                val options = listOf("Auto (up to 4K)", "1080p", "720p", "480p")
-                val current = AppStore.streamingQuality.value
-                AppStore.streamingQuality.value =
-                    options[(options.indexOf(current) + 1).mod(options.size)]
-            },
+            onClick = { showStreamQualityDialog = true },
         )
-        ToggleSetting("Autoplay next episode", AppStore.autoplayNextEpisode)
-        ToggleSetting("Autoplay previews", AppStore.autoplayPreviews)
         SettingItem(
             icon = Icons.Outlined.Speed,
-            title = "Playback speed",
+            title = "Default Playback Speed",
             subtitle = AppStore.playbackSpeed.value,
-            onClick = {
-                val options = listOf("0.5x", "Normal", "1.25x", "1.5x", "2x")
-                val current = AppStore.playbackSpeed.value
-                AppStore.playbackSpeed.value =
-                    options[(options.indexOf(current) + 1).mod(options.size)]
-            },
+            onClick = { showSpeedDialog = true },
+        )
+        ToggleSetting(
+            title = "Data Saver Mode",
+            subtitle = "Prioritizes 480p and lower bitrate on mobile data",
+            checked = AppStore.dataSaver.value,
+            icon = Icons.Outlined.DataSaverOn,
+            onCheckedChange = { AppStore.setDataSaver(it) },
         )
         SettingsDivider()
 
@@ -129,20 +137,21 @@ fun ProfileScreen(onManageDownloads: () -> Unit) {
         SectionHeader("Subtitles & Audio")
         SettingItem(
             icon = Icons.Outlined.ClosedCaption,
-            title = "Subtitle language",
+            title = "Preferred Subtitle Language",
             subtitle = AppStore.subtitleLanguage.value,
-            onClick = { showSubtitleDialog = true },
+            onClick = { showSubtitleLangDialog = true },
         )
-        SettingItem(icon = Icons.Outlined.ClosedCaption, title = "Subtitle size", subtitle = AppStore.subtitleSize.value, onClick = {
-            val options = listOf("Small", "Medium", "Large")
-            val current = AppStore.subtitleSize.value
-            AppStore.subtitleSize.value = options[(options.indexOf(current) + 1).mod(options.size)]
-        })
+        SettingItem(
+            icon = Icons.Outlined.TextFields,
+            title = "Subtitle Size",
+            subtitle = AppStore.subtitleSize.value,
+            onClick = { showSubtitleSizeDialog = true },
+        )
         SettingItem(
             icon = Icons.Outlined.Language,
-            title = "Audio language",
+            title = "Preferred Audio Track",
             subtitle = AppStore.audioLanguage.value,
-            onClick = { showAudioDialog = true },
+            onClick = { showAudioLangDialog = true },
         )
         SettingsDivider()
 
@@ -150,40 +159,32 @@ fun ProfileScreen(onManageDownloads: () -> Unit) {
         SectionHeader("Downloads")
         SettingItem(
             icon = Icons.Outlined.Download,
-            title = "Download quality",
+            title = "Download Quality",
             subtitle = AppStore.downloadQuality.value,
-            onClick = {
-                val options = listOf("Standard", "High", "Maximum")
-                val current = AppStore.downloadQuality.value
-                AppStore.downloadQuality.value =
-                    options[(options.indexOf(current) + 1).mod(options.size)]
-            },
+            onClick = { showDownloadQualityDialog = true },
         )
-        ToggleSetting("Download over Wi-Fi only", AppStore.wifiOnlyDownloads, icon = Icons.Outlined.Wifi)
+        ToggleSetting(
+            title = "Download over Wi-Fi only",
+            subtitle = "Prevent high data consumption on mobile network",
+            checked = AppStore.wifiOnlyDownloads.value,
+            icon = Icons.Outlined.Wifi,
+            onCheckedChange = { AppStore.setWifiOnly(it) },
+        )
         SettingItem(
             icon = Icons.Outlined.Storage,
-            title = "Manage downloads",
-            subtitle = "Storage usage and offline titles",
+            title = "Manage Downloads",
+            subtitle = "View offline titles, pause, resume, and storage",
             onClick = onManageDownloads,
         )
         SettingsDivider()
 
-        // ---- Notifications ----
-        SectionHeader("Notifications")
-        ToggleSetting("New releases", AppStore.notifyNewReleases, icon = Icons.Outlined.Notifications)
-        ToggleSetting("New episodes", AppStore.notifyNewEpisodes)
-        ToggleSetting("Recommendations", AppStore.notifyRecommendations)
-        ToggleSetting("Download notifications", AppStore.notifyDownloads)
-        SettingsDivider()
-
-        // ---- App ----
-        SectionHeader("App")
-        ToggleSetting("Data saver", AppStore.dataSaver)
+        // ---- About & Info ----
+        SectionHeader("About & Info")
         SettingItem(
             icon = Icons.Outlined.Language,
-            title = "App language",
+            title = "App Language",
             subtitle = AppStore.appLanguage.value,
-            onClick = { showLanguageDialog = true },
+            onClick = { showAppLangDialog = true },
         )
         SettingItem(
             icon = Icons.Outlined.Info,
@@ -191,48 +192,108 @@ fun ProfileScreen(onManageDownloads: () -> Unit) {
             subtitle = "Version 1.0.0",
             onClick = { showAboutDialog = true },
         )
-        SettingItem(icon = Icons.Outlined.PrivacyTip, title = "Privacy policy", onClick = {})
-        SettingItem(icon = Icons.Outlined.Info, title = "Terms of use", onClick = {})
+        SettingItem(
+            icon = Icons.Outlined.PrivacyTip,
+            title = "Privacy & Storage",
+            subtitle = "Zero tracking, local caching only",
+            onClick = { showPrivacyDialog = true },
+        )
 
         Spacer(Modifier.height(Spacing.xl))
     }
 
-    if (showLanguageDialog) {
+    // ---- Dialogs ----
+    if (showStreamQualityDialog) {
         RadioDialog(
-            title = "App language",
-            options = listOf("English", "Español", "Français", "العربية"),
-            selected = AppStore.appLanguage.value,
+            title = "Streaming Quality",
+            options = listOf("Auto (Best)", "1080p Full HD", "720p HD", "480p Data Saver"),
+            selected = AppStore.streamingQuality.value,
             onSelect = {
-                AppStore.appLanguage.value = it
-                showLanguageDialog = false
+                AppStore.updateStreamingQuality(it)
+                showStreamQualityDialog = false
             },
-            onDismiss = { showLanguageDialog = false },
+            onDismiss = { showStreamQualityDialog = false },
         )
     }
-    if (showSubtitleDialog) {
+
+    if (showSpeedDialog) {
         RadioDialog(
-            title = "Subtitle language",
-            options = listOf("Off", "English", "Español", "Français", "Arabic"),
+            title = "Default Playback Speed",
+            options = listOf("0.5x", "0.75x", "Normal", "1.25x", "1.5x", "2.0x"),
+            selected = AppStore.playbackSpeed.value,
+            onSelect = {
+                AppStore.updatePlaybackSpeed(it)
+                showSpeedDialog = false
+            },
+            onDismiss = { showSpeedDialog = false },
+        )
+    }
+
+    if (showDownloadQualityDialog) {
+        RadioDialog(
+            title = "Download Quality",
+            options = listOf("1080p Full HD", "720p (Recommended)", "480p (Data Saver)"),
+            selected = AppStore.downloadQuality.value,
+            onSelect = {
+                AppStore.updateDownloadQuality(it)
+                showDownloadQualityDialog = false
+            },
+            onDismiss = { showDownloadQualityDialog = false },
+        )
+    }
+
+    if (showSubtitleLangDialog) {
+        RadioDialog(
+            title = "Subtitle Language",
+            options = listOf("Off", "English", "हिन्दी (Hindi)", "Español", "Français"),
             selected = AppStore.subtitleLanguage.value,
             onSelect = {
-                AppStore.subtitleLanguage.value = it
-                showSubtitleDialog = false
+                AppStore.updateSubtitleLanguage(it)
+                showSubtitleLangDialog = false
             },
-            onDismiss = { showSubtitleDialog = false },
+            onDismiss = { showSubtitleLangDialog = false },
         )
     }
-    if (showAudioDialog) {
+
+    if (showSubtitleSizeDialog) {
         RadioDialog(
-            title = "Audio language",
-            options = listOf("Original", "English", "Español", "Français"),
+            title = "Subtitle Font Size",
+            options = listOf("Small", "Medium", "Large"),
+            selected = AppStore.subtitleSize.value,
+            onSelect = {
+                AppStore.updateSubtitleSize(it)
+                showSubtitleSizeDialog = false
+            },
+            onDismiss = { showSubtitleSizeDialog = false },
+        )
+    }
+
+    if (showAudioLangDialog) {
+        RadioDialog(
+            title = "Preferred Audio Track",
+            options = listOf("Default / Original", "Hindi", "English"),
             selected = AppStore.audioLanguage.value,
             onSelect = {
-                AppStore.audioLanguage.value = it
-                showAudioDialog = false
+                AppStore.updateAudioLanguage(it)
+                showAudioLangDialog = false
             },
-            onDismiss = { showAudioDialog = false },
+            onDismiss = { showAudioLangDialog = false },
         )
     }
+
+    if (showAppLangDialog) {
+        RadioDialog(
+            title = "App Language",
+            options = listOf("English", "हिन्दी (Hindi)", "Español"),
+            selected = AppStore.appLanguage.value,
+            onSelect = {
+                AppStore.updateAppLanguage(it)
+                showAppLangDialog = false
+            },
+            onDismiss = { showAppLangDialog = false },
+        )
+    }
+
     if (showAboutDialog) {
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
@@ -242,7 +303,28 @@ fun ProfileScreen(onManageDownloads: () -> Unit) {
             title = { Text("CineNova") },
             text = {
                 Text(
-                    "A Material You streaming experience.\nVersion 1.0.0\n\nCineNova is a demo product — all artwork is placeholder imagery.",
+                    "CineNova v1.0.0
+
+High-performance Material 3 streaming app with real-time video playback, offline downloads, and low-data optimization.",
+                )
+            },
+        )
+    }
+
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            confirmButton = {
+                TextButton(onClick = { showPrivacyDialog = false }) { Text("Close") }
+            },
+            title = { Text("Privacy & Storage") },
+            text = {
+                Text(
+                    "CineNova respects your privacy:
+
+• Zero personal data tracking.
+• No third-party ad SDKs.
+• Offline downloads and settings stored strictly on your local device.",
                 )
             },
         )
@@ -252,16 +334,19 @@ fun ProfileScreen(onManageDownloads: () -> Unit) {
 @Composable
 private fun ToggleSetting(
     title: String,
-    state: androidx.compose.runtime.MutableState<Boolean>,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    subtitle: String? = null,
+    checked: Boolean,
+    icon: ImageVector? = null,
+    onCheckedChange: (Boolean) -> Unit,
 ) {
     SettingItem(
-        icon = icon ?: Icons.Outlined.PlayCircle,
+        icon = icon ?: Icons.Outlined.Notifications,
         title = title,
+        subtitle = subtitle,
         trailing = {
             Switch(
-                checked = state.value,
-                onCheckedChange = { state.value = it },
+                checked = checked,
+                onCheckedChange = onCheckedChange,
             )
         },
     )
@@ -283,14 +368,24 @@ private fun RadioDialog(
         },
         title = { Text(title) },
         text = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 options.forEach { option ->
-                    androidx.compose.foundation.layout.Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(option) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = option == selected, onClick = { onSelect(option) })
-                        Text(option, style = MaterialTheme.typography.bodyLarge)
+                        RadioButton(
+                            selected = option == selected,
+                            onClick = { onSelect(option) },
+                        )
+                        Text(
+                            option,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
                     }
                 }
             }

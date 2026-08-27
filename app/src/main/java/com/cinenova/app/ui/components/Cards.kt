@@ -57,7 +57,6 @@ fun MoviePosterCard(
             .width(width)
             .clip(MaterialTheme.shapes.medium)
             .clickable(onClick = onClick)
-            .animateContentSize(Motion.normal())
             .semantics { contentDescription = "Movie poster for ${item.title}" },
     ) {
         Surface(shape = MaterialTheme.shapes.medium) {

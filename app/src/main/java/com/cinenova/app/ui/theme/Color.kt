@@ -2,26 +2,30 @@ package com.cinenova.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Brand palette — vibrant modern gold accent with rich midnight surfaces.
+// Cinematic Gold Accent
 val Gold = Color(0xFFFFC82C)
-val GoldDim = Color(0xFFD4A017)
+val GoldDim = Color(0xFFE6A817)
 val GoldContainerDark = Color(0xFF423405)
 val OnGoldContainerDark = Color(0xFFFFE599)
 
-val MidnightNavy = Color(0xFF131722)
-val SoftCharcoal = Color(0xFF1B202D)
-val SlateContainer = Color(0xFF242B3B)
-val OutlineDark = Color(0xFF485166)
-val OnSurfaceDark = Color(0xFFEEF1F7)
-val OnSurfaceVariantDark = Color(0xFFB0B7C6)
+// Royal Navy Blue Dark Theme
+val NavyDarkBackground = Color(0xFF0F172A) // Rich Deep Navy
+val NavyDarkSurface = Color(0xFF1E293B)    // Navy Blue Surface
+val NavyDarkContainer = Color(0xFF26334D)  // Navy Container
+val NavyDarkContainerHigh = Color(0xFF334155)
+val OutlineDark = Color(0xFF475569)
+val OnSurfaceDark = Color(0xFFF8FAFC)
+val OnSurfaceVariantDark = Color(0xFFCBD5E1)
 
-val PaperWhite = Color(0xFFF8F9FC)
-val SurfaceLight = Color(0xFFFFFFFF)
-val SurfaceContainerLight = Color(0xFFEDF1F7)
-val OutlineLight = Color(0xFF8A93A4)
-val OnSurfaceLight = Color(0xFF1A1D24)
-val OnSurfaceVariantLight = Color(0xFF5A6273)
+// Clean Crisp Light Theme
+val SlateLightBackground = Color(0xFFF8FAFC)
+val SlateLightSurface = Color(0xFFFFFFFF)
+val SlateLightContainer = Color(0xFFF1F5F9)
+val SlateLightContainerHigh = Color(0xFFE2E8F0)
+val OutlineLight = Color(0xFF94A3B8)
+val OnSurfaceLight = Color(0xFF0F172A)
+val OnSurfaceVariantLight = Color(0xFF475569)
 
-val SuccessGreen = Color(0xFF4CAF50)
-val ErrorRed = Color(0xFFFF5252)
-val InfoBlue = Color(0xFF448AFF)
+val SuccessGreen = Color(0xFF22C55E)
+val ErrorRed = Color(0xFFEF4444)
+val InfoBlue = Color(0xFF38BDF8)

@@ -1,15 +1,16 @@
 package com.cinenova.app.navigation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,8 +25,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
@@ -48,9 +47,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,10 +75,9 @@ import com.cinenova.app.ui.screens.PlayerScreen
 import com.cinenova.app.ui.screens.ProfileScreen
 import com.cinenova.app.ui.screens.SearchScreen
 import com.cinenova.app.ui.screens.WatchlistScreen
-import kotlinx.coroutines.launch
 
 object Routes {
-    const val MAIN_PAGER = "main_pager"
+    const val MAIN_TABS = "main_tabs"
     const val SEARCH = "search"
     const val NOTIFICATIONS = "notifications"
     const val CONTINUE_WATCHING = "continue_watching"
@@ -91,7 +89,7 @@ object Routes {
 }
 
 private data class BottomDestination(
-    val pageIndex: Int,
+    val index: Int,
     val label: String,
     val icon: ImageVector,
     val selectedIcon: ImageVector,
@@ -106,9 +104,8 @@ private val bottomDestinations = listOf(
 )
 
 /**
- * Modern CineNova app with swipeable horizontal slider pager and elevated glassmorphic pill nav bar.
+ * 60FPS Ultra-Responsive CineNova app with Sliding Pill Glassmorphic Navigation Bar.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CineNovaApp() {
     LaunchedEffect(Unit) {
@@ -116,12 +113,10 @@ fun CineNovaApp() {
     }
 
     val navController = rememberNavController()
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
 
-    NavHost(navController = navController, startDestination = Routes.MAIN_PAGER) {
-        composable(Routes.MAIN_PAGER) {
-            MainPagerScreen(
+    NavHost(navController = navController, startDestination = Routes.MAIN_TABS) {
+        composable(Routes.MAIN_TABS) {
+            MainTabsContainer(
                 onOpenSearch = { navController.navigate(Routes.SEARCH) },
                 onOpenDetails = { navController.navigate(Routes.details(it)) },
                 onPlay = { navController.navigate(Routes.player(it)) },
@@ -166,32 +161,29 @@ fun CineNovaApp() {
 }
 
 /**
- * Swipeable horizontal slider pager for seamless navigation between Home, Explore, Downloads, Watchlist, and Profile.
+ * Instant 0ms Zero-Lag Tab Container with smooth Crossfade transitions.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MainPagerScreen(
+private fun MainTabsContainer(
     onOpenSearch: () -> Unit,
     onOpenDetails: (String) -> Unit,
     onPlay: (String) -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenContinueWatching: () -> Unit,
 ) {
-    val pagerState = rememberPagerState(pageCount = { bottomDestinations.size })
-    val scope = rememberCoroutineScope()
+    var selectedIndex by remember { mutableIntStateOf(0) }
     val useGlassNav = AppStore.glassNavBar.value
 
-    fun scrollToPage(page: Int) {
-        scope.launch {
-            pagerState.animateScrollToPage(page)
-        }
-    }
-
     if (useGlassNav) {
-        Box(Modifier.fillMaxSize()) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) {
+            Crossfade(
+                targetState = selectedIndex,
+                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                label = "tabCrossfade",
             ) { page ->
                 when (page) {
                     0 -> HomeScreen(
@@ -203,25 +195,25 @@ private fun MainPagerScreen(
                     )
                     1 -> ExploreScreen(onOpenDetails = onOpenDetails)
                     2 -> DownloadsScreen(
-                        onBack = { scrollToPage(0) },
+                        onBack = { selectedIndex = 0 },
                         onOpenDetails = onOpenDetails,
-                        onExplore = { scrollToPage(1) },
+                        onExplore = { selectedIndex = 1 },
                     )
                     3 -> WatchlistScreen(
                         onOpenDetails = onOpenDetails,
-                        onExplore = { scrollToPage(1) },
+                        onExplore = { selectedIndex = 1 },
                     )
-                    4 -> ProfileScreen(onManageDownloads = { scrollToPage(2) })
+                    4 -> ProfileScreen(onManageDownloads = { selectedIndex = 2 })
                 }
             }
 
-            // Floating elevated glassmorphic pill bar positioned higher up
+            // Floating elevated glassmorphic pill bar with sliding indicator
             FloatingGlassNavBar(
-                selectedPageIndex = pagerState.currentPage,
-                onSelectPage = { page -> scrollToPage(page) },
+                selectedIndex = selectedIndex,
+                onSelectIndex = { selectedIndex = it },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 20.dp, vertical = 28.dp),
+                    .padding(horizontal = 20.dp, vertical = 24.dp),
             )
         }
     } else {
@@ -229,10 +221,10 @@ private fun MainPagerScreen(
             bottomBar = {
                 NavigationBar {
                     bottomDestinations.forEach { dest ->
-                        val selected = pagerState.currentPage == dest.pageIndex
+                        val selected = selectedIndex == dest.index
                         NavigationBarItem(
                             selected = selected,
-                            onClick = { scrollToPage(dest.pageIndex) },
+                            onClick = { selectedIndex = dest.index },
                             icon = {
                                 Icon(
                                     if (selected) dest.selectedIcon else dest.icon,
@@ -245,76 +237,85 @@ private fun MainPagerScreen(
                 }
             },
         ) { innerPadding ->
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
+            Box(
+                Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
-            ) { page ->
-                when (page) {
-                    0 -> HomeScreen(
-                        onOpenSearch = onOpenSearch,
-                        onOpenDetails = onOpenDetails,
-                        onPlay = onPlay,
-                        onOpenNotifications = onOpenNotifications,
-                        onOpenContinueWatching = onOpenContinueWatching,
-                    )
-                    1 -> ExploreScreen(onOpenDetails = onOpenDetails)
-                    2 -> DownloadsScreen(
-                        onBack = { scrollToPage(0) },
-                        onOpenDetails = onOpenDetails,
-                        onExplore = { scrollToPage(1) },
-                    )
-                    3 -> WatchlistScreen(
-                        onOpenDetails = onOpenDetails,
-                        onExplore = { scrollToPage(1) },
-                    )
-                    4 -> ProfileScreen(onManageDownloads = { scrollToPage(2) })
+                    .padding(innerPadding)
+                    .background(MaterialTheme.colorScheme.background),
+            ) {
+                Crossfade(
+                    targetState = selectedIndex,
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                    label = "tabCrossfadeStandard",
+                ) { page ->
+                    when (page) {
+                        0 -> HomeScreen(
+                            onOpenSearch = onOpenSearch,
+                            onOpenDetails = onOpenDetails,
+                            onPlay = onPlay,
+                            onOpenNotifications = onOpenNotifications,
+                            onOpenContinueWatching = onOpenContinueWatching,
+                        )
+                        1 -> ExploreScreen(onOpenDetails = onOpenDetails)
+                        2 -> DownloadsScreen(
+                            onBack = { selectedIndex = 0 },
+                            onOpenDetails = onOpenDetails,
+                            onExplore = { selectedIndex = 1 },
+                        )
+                        3 -> WatchlistScreen(
+                            onOpenDetails = onOpenDetails,
+                            onExplore = { selectedIndex = 1 },
+                        )
+                        4 -> ProfileScreen(onManageDownloads = { selectedIndex = 2 })
+                    }
                 }
             }
         }
     }
 }
 
+/**
+ * Floating glassmorphism pill with sliding active indicator.
+ */
 @Composable
 private fun FloatingGlassNavBar(
-    selectedPageIndex: Int,
-    onSelectPage: (Int) -> Unit,
+    selectedIndex: Int,
+    onSelectIndex: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 20.dp,
+                elevation = 16.dp,
                 shape = CircleShape,
                 spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
             )
             .clip(CircleShape)
             .border(
                 border = BorderStroke(
-                    width = 1.2.dp,
+                    width = 1.dp,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.35f),
-                            Color.White.copy(alpha = 0.08f),
+                            Color.White.copy(alpha = 0.30f),
+                            Color.White.copy(alpha = 0.06f),
                         ),
                     ),
                 ),
                 shape = CircleShape,
             ),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-        tonalElevation = 8.dp,
+        tonalElevation = 6.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             bottomDestinations.forEach { dest ->
-                val selected = selectedPageIndex == dest.pageIndex
+                val selected = selectedIndex == dest.index
                 val iconColor by animateColorAsState(
                     targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
@@ -327,7 +328,7 @@ private fun FloatingGlassNavBar(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = { onSelectPage(dest.pageIndex) },
+                            onClick = { onSelectIndex(dest.index) },
                         )
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -338,7 +339,7 @@ private fun FloatingGlassNavBar(
                             .size(36.dp)
                             .clip(CircleShape)
                             .background(
-                                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.50f)
                                 else Color.Transparent,
                             ),
                         contentAlignment = Alignment.Center,

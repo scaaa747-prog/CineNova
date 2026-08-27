@@ -149,8 +149,8 @@ fun DownloadButton(
 fun Modifier.bottomScrim(): Modifier = this.drawBehind {
     drawRect(
         brush = Brush.verticalGradient(
-            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
-            startY = size.height * 0.45f,
+            colors = listOf(Color.Transparent, Color(0xFF0F172A).copy(alpha = 0.85f)),
+            startY = size.height * 0.40f,
         ),
     )
 }

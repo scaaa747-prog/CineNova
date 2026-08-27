@@ -231,8 +231,8 @@ fun HomeScreen(
                     item {
                         FeaturedHero(
                             items = heroItems,
-                            onPlay = { heroItems.firstOrNull()?.let { onPlay(it.id) } },
-                            onDetails = { heroItems.firstOrNull()?.let { onOpenDetails(it.id) } },
+                            onPlay = { onPlay(it.id) },
+                            onOpenDetails = { onOpenDetails(it.id) },
                         )
                     }
                 }
@@ -247,7 +247,7 @@ fun HomeScreen(
                     ContentRow(
                         title = section.title ?: "Trending Now",
                         items = mediaList,
-                        onItemClick = { onOpenDetails(it.id) },
+                        onOpenDetails = { onOpenDetails(it.id) },
                     )
                 }
 

@@ -303,9 +303,9 @@ fun ProfileScreen(onManageDownloads: () -> Unit) {
             title = { Text("CineNova") },
             text = {
                 Text(
-                    "CineNova v1.0.0
+                    """CineNova v1.0.0
 
-High-performance Material 3 streaming app with real-time video playback, offline downloads, and low-data optimization.",
+High-performance Material 3 streaming app with real-time video playback, offline downloads, and low-data optimization.""",
                 )
             },
         )
@@ -320,11 +320,11 @@ High-performance Material 3 streaming app with real-time video playback, offline
             title = { Text("Privacy & Storage") },
             text = {
                 Text(
-                    "CineNova respects your privacy:
+                    """CineNova respects your privacy:
 
 • Zero personal data tracking.
 • No third-party ad SDKs.
-• Offline downloads and settings stored strictly on your local device.",
+• Offline downloads and settings stored strictly on your local device.""",
                 )
             },
         )
